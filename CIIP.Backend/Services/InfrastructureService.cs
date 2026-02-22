@@ -14,14 +14,24 @@ public class InfrastructureService
     }
 
     public async Task<Machine> AddMachine(
-        Guid plantId,
-        string machineCode,
-        string machineName,
-        string machineType,
-        string gatewayCode,
-        string endpointType,
-        string protocol)
+    Guid tenantId,
+    Guid plantId,
+    string machineCode,
+    string machineName,
+    string machineType,
+    string gatewayCode,
+    string endpointType,
+    string protocol)
     {
+        // ⭐ Validate plant belongs to tenant
+        var plant = await _db.Plants
+            .FirstOrDefaultAsync(p =>
+                p.PlantId == plantId &&
+                p.TenantId == tenantId);
+
+        if (plant == null)
+            throw new Exception("Unauthorized plant access.");
+
         var gateway = await _db.Gateways
             .FirstOrDefaultAsync(g => g.PlantId == plantId);
 
@@ -73,4 +83,5 @@ public class InfrastructureService
 
         return machine;
     }
+
 }

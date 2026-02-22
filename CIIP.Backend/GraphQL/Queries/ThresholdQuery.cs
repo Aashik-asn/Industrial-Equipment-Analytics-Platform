@@ -2,16 +2,24 @@
 using CIIP.Backend.Entities;
 using CIIP.Backend.DTOs;
 using Microsoft.EntityFrameworkCore;
-using CIIP.Backend.GraphQL.Queries;
+using HotChocolate.Authorization;
+using System.Security.Claims;
+
+namespace CIIP.Backend.GraphQL.Queries;
 
 [ExtendObjectType(typeof(Query))]
 public class ThresholdQuery
 {
-    public async Task<List<ThresholdDto>> GetThresholds(
-        Guid tenantId,
+    [Authorize]
+    public async Task<List<ThresholdDto>> Thresholds(
+        ClaimsPrincipal user,
         string machineType,
         [Service] CiipDbContext db)
     {
+        var tenantId = Guid.Parse(
+            user.FindFirst("tenantId")!.Value
+        );
+
         var rows = await db.AlertThresholds
             .AsNoTracking()
             .Where(x => x.TenantId == tenantId || x.TenantId == null)

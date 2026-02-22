@@ -2,7 +2,6 @@
 
 public class ThresholdInput
 {
-    public Guid TenantId { get; set; }
     public string? MachineType { get; set; }
 
     public string Parameter { get; set; } = default!;

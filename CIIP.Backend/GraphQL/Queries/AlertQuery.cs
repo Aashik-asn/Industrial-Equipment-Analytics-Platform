@@ -1,30 +1,56 @@
 ﻿using CIIP.Backend.DTOs;
-using CIIP.Backend.GraphQL.Mutations;
 using CIIP.Backend.Services;
+using HotChocolate.Authorization;
+using System.Security.Claims;
 
 namespace CIIP.Backend.GraphQL.Queries;
 
 [ExtendObjectType(typeof(Query))]
 public class AlertQuery
 {
-    public Task<List<AlertDto>> GetAlerts(
+    // ======================================================
+    // ALERT LIST
+    // ======================================================
+
+    [Authorize]
+    public Task<List<AlertDto>> Alerts(
         [Service] AlertService service,
-        Guid tenantId,
+        ClaimsPrincipal user,
         Guid? plantId,
         string? severity,
         string? status,
         DateTime? fromDate,
         DateTime? toDate)
-        => service.GetAlerts(
+    {
+        var tenantId = Guid.Parse(
+            user.FindFirst("tenantId")!.Value
+        );
+
+        return service.GetAlerts(
             tenantId,
             plantId,
             severity,
             status,
             fromDate,
             toDate);
+    }
 
-    public Task<AlertSummaryDto> GetAlertSummary(
+    // ======================================================
+    // ALERT SUMMARY
+    // ======================================================
+
+    [Authorize]
+    public Task<AlertSummaryDto> AlertSummary(
         [Service] AlertService service,
-        Guid tenantId)
-        => service.GetSummary(tenantId);
+        ClaimsPrincipal user)
+    {
+        Console.WriteLine("######## ALERT SUMMARY EXECUTED ########");
+        Console.WriteLine("JWT TenantId = " + user.FindFirst("tenantId")?.Value);
+
+        var tenantId = Guid.Parse(
+            user.FindFirst("tenantId")!.Value
+        );
+
+        return service.GetSummary(tenantId);
+    }
 }

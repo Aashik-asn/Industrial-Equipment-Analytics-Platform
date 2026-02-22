@@ -3,10 +3,11 @@ using CIIP.Backend.GraphQL.Mutations;
 using CIIP.Backend.GraphQL.Queries;
 using CIIP.Backend.Services;
 using Microsoft.EntityFrameworkCore;
-
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+
+
 
 
 
@@ -43,6 +44,9 @@ builder.Services.AddHostedService<TelemetryProcessor>();
 // ======================================================
 builder.Services
     .AddGraphQLServer()
+    .ModifyRequestOptions(opt => opt.IncludeExceptionDetails = true)
+    .AddAuthorization()   // REQUIRED FOR [Authorize]
+
     .AddQueryType<Query>()
     .AddMutationType<Mutation>()
 
@@ -59,9 +63,11 @@ builder.Services
     .AddTypeExtension<MachineDetailsQuery>()
     .AddTypeExtension<AlertQuery>()
     .AddTypeExtension<ThresholdQuery>()
+
     .AddFiltering()
     .AddSorting()
     .AddProjections();
+
 
 // ======================================================
 // JWT AUTHENTICATION
@@ -102,6 +108,8 @@ if (app.Environment.IsDevelopment())
 // ======================================================
 // IMPORTANT ORDER — AUTH BEFORE GRAPHQL
 // ======================================================
+app.UseRouting();
+
 app.UseAuthentication();
 app.UseAuthorization();
 

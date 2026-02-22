@@ -108,13 +108,26 @@ public class AlertService
     // ======================================================
     // ACKNOWLEDGE ALERT
     // ======================================================
-    public async Task<bool> Acknowledge(AcknowledgementDto dto)
+    public async Task<bool> Acknowledge(
+    AcknowledgementDto dto,
+    Guid tenantId)
     {
         var exists = await _db.AlertAcknowledgements
             .AnyAsync(x => x.AlertId == dto.AlertId);
 
         if (exists)
             throw new Exception("Alert already acknowledged.");
+
+        // ⭐ Validate tenant ownership
+        var alert = await _db.AlertEvents
+            .Include(a => a.Machine!)
+            .ThenInclude(m => m.Plant!)
+            .FirstOrDefaultAsync(a =>
+                a.AlertId == dto.AlertId &&
+                a.Machine!.Plant!.TenantId == tenantId);
+
+        if (alert == null)
+            throw new Exception("Unauthorized alert access.");
 
         var ack = new AlertAcknowledgement
         {
@@ -128,13 +141,11 @@ public class AlertService
 
         _db.AlertAcknowledgements.Add(ack);
 
-        var alert = await _db.AlertEvents
-            .FirstAsync(x => x.AlertId == dto.AlertId);
-
         alert.AlertStatus = "ACKNOWLEDGED";
 
         await _db.SaveChangesAsync();
 
         return true;
     }
+
 }
