@@ -13,6 +13,9 @@ public class MachineDetailsResponse
     public List<TrendPoint> HealthTrend { get; set; } = new();
     public List<TrendPoint> LoadTrend { get; set; } = new();
     public List<TrendPoint> VibrationTrend { get; set; } = new();
+    public List<TrendPoint> PowerConsumptionTrend { get; set; } = new();
+    public List<TrendPoint> TemperatureTrend { get; set; } = new();
+
 
     public ElectricalSnapshot? Electrical { get; set; }
     public EnvironmentalSnapshot? Environmental { get; set; }
@@ -47,6 +50,10 @@ public class ElectricalSnapshot
 
     public decimal PowerFactor { get; set; }
     public decimal Frequency { get; set; }
+
+    public decimal EnergyImportKwh { get; set; }
+    public decimal EnergyExportKwh { get; set; }
+    public decimal EnergyImportKvah { get; set; }
 }
 
 public class EnvironmentalSnapshot

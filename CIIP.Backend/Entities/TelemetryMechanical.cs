@@ -10,7 +10,10 @@ public class TelemetryMechanical
     [Column("ingestion_id")]
     public long IngestionId { get; set; }
 
-    [Column("vibration")] public decimal? Vibration { get; set; }
+    [Column("vibration_x", TypeName = "double precision")] public decimal? VibrationX { get; set; }
+    [Column("vibration_y", TypeName = "double precision")] public decimal? VibrationY { get; set; }
+    [Column("vibration_z", TypeName = "double precision")] public decimal? VibrationZ { get; set; }
+
     [Column("rpm")] public decimal? Rpm { get; set; }
 
     public TelemetryIngestion? Ingestion { get; set; }

@@ -82,9 +82,15 @@ public class TelemetryProcessor : BackgroundService
         {
             var timeUtc = DateTime.SpecifyKind(t.RecordedAt, DateTimeKind.Utc);
 
+            decimal vx = t.Mechanical?.VibrationX ?? 0;
+            decimal vy = t.Mechanical?.VibrationY ?? 0;
+            decimal vz = t.Mechanical?.VibrationZ ?? 0;
+
+            decimal avgVibration = (vx + vy + vz) / 3m;
+
             double healthScore =
                 100
-                - (double)(t.Mechanical?.Vibration ?? 0) * 2
+                - (double)avgVibration * 2
                 - (double)(t.Electrical?.RCurrent ?? 0) * 0.1;
 
             decimal runtime = runtimeCache.ContainsKey(t.MachineId)
@@ -130,7 +136,7 @@ public class TelemetryProcessor : BackgroundService
     private async Task UpdateMachineStatus(CiipDbContext db)
     {
         var machines = await db.Machines
-            .Include(m => m.Plant)       // ✅ needed for tenant resolution later
+            .Include(m => m.Plant)
             .AsTracking()
             .ToDictionaryAsync(x => x.MachineId);
 
@@ -150,7 +156,7 @@ public class TelemetryProcessor : BackgroundService
             if (!machines.TryGetValue(t.MachineId, out var machine))
                 continue;
 
-            decimal rpm = (decimal)(t.Mechanical?.Rpm ?? 0);
+            decimal rpm = t.Mechanical?.Rpm ?? 0;
             machine.Status = rpm > 200 ? "RUNNING" : "IDLE";
         }
 
@@ -165,19 +171,9 @@ public class TelemetryProcessor : BackgroundService
         var thresholdService = new ThresholdService(db);
 
         var machines = await db.Machines
-            .Include(m => m.Plant)     // ⭐ CRITICAL FIX
+            .Include(m => m.Plant)
             .AsNoTracking()
             .ToDictionaryAsync(x => x.MachineId);
-
-        var activeAlertSet = (await db.AlertEvents
-            .Where(a => a.AlertStatus == "ACTIVE")
-            .Select(a => new { a.MachineId, a.Parameter })
-            .ToListAsync())
-            .Select(a => (a.MachineId, a.Parameter))
-            .ToHashSet();
-
-        bool HasActive(Guid machineId, string parameter) =>
-            activeAlertSet.Contains((machineId, parameter));
 
         var telemetry = await db.TelemetryIngestions
             .Include(t => t.Mechanical)
@@ -206,9 +202,13 @@ public class TelemetryProcessor : BackgroundService
 
             var timeUtc = DateTime.SpecifyKind(t.RecordedAt, DateTimeKind.Utc);
 
-            decimal vibration = (decimal)(t.Mechanical?.Vibration ?? 0);
-            decimal rpm = (decimal)(t.Mechanical?.Rpm ?? 0);
-            decimal temperature = (decimal)(t.Environmental?.Temperature ?? 0);
+            decimal vibration =
+                ((t.Mechanical?.VibrationX ?? 0)
+                + (t.Mechanical?.VibrationY ?? 0)
+                + (t.Mechanical?.VibrationZ ?? 0)) / 3m;
+
+            decimal rpm = t.Mechanical?.Rpm ?? 0;
+            decimal temperature = t.Environmental?.Temperature ?? 0;
 
             decimal maxCurrent = new[]
             {
@@ -217,71 +217,25 @@ public class TelemetryProcessor : BackgroundService
                 t.Electrical?.BCurrent ?? 0
             }.Max();
 
-            // VIBRATION
-            if (!HasActive(t.MachineId, "Vibration"))
-            {
-                if (vibration >= threshold.VibrationCritical)
-                    newAlerts.Add(CreateAlert(t.MachineId, "Vibration", vibration, "CRITICAL", timeUtc, threshold.VibrationThresholdId));
-                else if (vibration >= threshold.VibrationWarning)
-                    newAlerts.Add(CreateAlert(t.MachineId, "Vibration", vibration, "WARNING", timeUtc, threshold.VibrationThresholdId));
-            }
+            if (vibration >= threshold.VibrationCritical)
+                newAlerts.Add(CreateAlert(t.MachineId, "Vibration", vibration, "CRITICAL", timeUtc, threshold.VibrationThresholdId));
+            else if (vibration >= threshold.VibrationWarning)
+                newAlerts.Add(CreateAlert(t.MachineId, "Vibration", vibration, "WARNING", timeUtc, threshold.VibrationThresholdId));
 
-            // CURRENT
-            if (!HasActive(t.MachineId, "Current"))
-            {
-                if (maxCurrent >= threshold.CurrentCritical)
-                    newAlerts.Add(CreateAlert(t.MachineId, "Current", maxCurrent, "CRITICAL", timeUtc, threshold.CurrentThresholdId));
-                else if (maxCurrent >= threshold.CurrentWarning)
-                    newAlerts.Add(CreateAlert(t.MachineId, "Current", maxCurrent, "WARNING", timeUtc, threshold.CurrentThresholdId));
-            }
+            if (maxCurrent >= threshold.CurrentCritical)
+                newAlerts.Add(CreateAlert(t.MachineId, "Current", maxCurrent, "CRITICAL", timeUtc, threshold.CurrentThresholdId));
+            else if (maxCurrent >= threshold.CurrentWarning)
+                newAlerts.Add(CreateAlert(t.MachineId, "Current", maxCurrent, "WARNING", timeUtc, threshold.CurrentThresholdId));
 
-            // RPM (FIXED VERSION LOCKING)
-            if (!HasActive(t.MachineId, "RPM"))
-            {
-                if (rpm < threshold.RpmCriticalLow)
-                    newAlerts.Add(CreateAlert(t.MachineId, "RPM", rpm, "CRITICAL", timeUtc, threshold.RpmLowThresholdId));
+            if (rpm < threshold.RpmCriticalLow)
+                newAlerts.Add(CreateAlert(t.MachineId, "RPM", rpm, "CRITICAL", timeUtc, threshold.RpmLowThresholdId));
+            else if (rpm > threshold.RpmCriticalHigh)
+                newAlerts.Add(CreateAlert(t.MachineId, "RPM", rpm, "CRITICAL", timeUtc, threshold.RpmHighThresholdId));
 
-                else if (rpm > threshold.RpmCriticalHigh)
-                    newAlerts.Add(CreateAlert(t.MachineId, "RPM", rpm, "CRITICAL", timeUtc, threshold.RpmHighThresholdId));
-
-                else if (rpm < threshold.RpmWarningLow)
-                    newAlerts.Add(CreateAlert(t.MachineId, "RPM", rpm, "WARNING", timeUtc, threshold.RpmLowThresholdId));
-
-                else if (rpm > threshold.RpmWarningHigh)
-                    newAlerts.Add(CreateAlert(t.MachineId, "RPM", rpm, "WARNING", timeUtc, threshold.RpmHighThresholdId));
-            }
-
-            // TEMPERATURE
-            if (!HasActive(t.MachineId, "Temperature"))
-            {
-                if (temperature >= threshold.TemperatureCritical)
-                    newAlerts.Add(CreateAlert(t.MachineId, "Temperature", temperature, "CRITICAL", timeUtc, threshold.TemperatureThresholdId));
-                else if (temperature >= threshold.TemperatureWarning)
-                    newAlerts.Add(CreateAlert(t.MachineId, "Temperature", temperature, "WARNING", timeUtc, threshold.TemperatureThresholdId));
-            }
-        }
-
-        // MACHINE STATUS ALERT
-        var latestStatusTelemetry = telemetry
-            .GroupBy(t => t.MachineId)
-            .Select(g => g.OrderByDescending(x => x.RecordedAt).First())
-            .ToList();
-
-        foreach (var t in latestStatusTelemetry)
-        {
-            if (!machines.TryGetValue(t.MachineId, out var machine))
-                continue;
-
-            if (machine.Status == "IDLE" && !HasActive(t.MachineId, "MachineStatus"))
-            {
-                newAlerts.Add(CreateAlert(
-                    t.MachineId,
-                    "MachineStatus",
-                    0,
-                    "WARNING",
-                    DateTime.SpecifyKind(t.RecordedAt, DateTimeKind.Utc),
-                    null));
-            }
+            if (temperature >= threshold.TemperatureCritical)
+                newAlerts.Add(CreateAlert(t.MachineId, "Temperature", temperature, "CRITICAL", timeUtc, threshold.TemperatureThresholdId));
+            else if (temperature >= threshold.TemperatureWarning)
+                newAlerts.Add(CreateAlert(t.MachineId, "Temperature", temperature, "WARNING", timeUtc, threshold.TemperatureThresholdId));
         }
 
         if (newAlerts.Count > 0)
