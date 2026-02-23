@@ -50,6 +50,8 @@ public class ThresholdService
         var rpmLow = Resolve("RPM_LOW");
         var rpmHigh = Resolve("RPM_HIGH");
         var temp = Resolve("Temperature");
+        var loadHigh = Resolve("LOAD_HIGH");
+        var loadLow = Resolve("LOAD_LOW");
 
         return new ThresholdConfig
         {
@@ -71,7 +73,15 @@ public class ThresholdService
 
             TemperatureWarning = temp.WarningValue,
             TemperatureCritical = temp.CriticalValue,
-            TemperatureThresholdId = temp.ThresholdId
+            TemperatureThresholdId = temp.ThresholdId,
+
+            LoadHighWarning = loadHigh.WarningValue,
+            LoadHighCritical = loadHigh.CriticalValue,
+            LoadHighThresholdId = loadHigh.ThresholdId,
+
+            LoadLowWarning = loadLow.WarningValue,
+            LoadLowCritical = loadLow.CriticalValue,
+            LoadLowThresholdId = loadLow.ThresholdId
         };
     }
 

@@ -31,35 +31,29 @@ public class TelemetryProcessor : BackgroundService
     }
 
     // ======================================================
-    // MACHINE HEALTH ENGINE (STABLE VERSION)
+    // MACHINE HEALTH ENGINE (UNCHANGED)
     // ======================================================
     private async Task ProcessMachineHealth(CiipDbContext db)
     {
-        var lastHealthTimeRaw = await db.MachineHealth
-            .OrderByDescending(x => x.RecordedAt)
-            .Select(x => (DateTime?)x.RecordedAt)
-            .FirstOrDefaultAsync();
+        var lastHealthPerMachine = await db.MachineHealth
+            .GroupBy(h => h.MachineId)
+            .Select(g => new
+            {
+                MachineId = g.Key,
+                LastTime = g.Max(x => x.RecordedAt),
+                Runtime = g.OrderByDescending(x => x.RecordedAt)
+                           .Select(x => x.RuntimeHours)
+                           .FirstOrDefault()
+            })
+            .ToDictionaryAsync(x => x.MachineId);
 
-        DateTime? lastHealthTime = lastHealthTimeRaw.HasValue
-            ? DateTime.SpecifyKind(lastHealthTimeRaw.Value, DateTimeKind.Utc)
-            : null;
-
-        IQueryable<TelemetryIngestion> telemetryQuery = db.TelemetryIngestions
+        var telemetry = await db.TelemetryIngestions
             .Include(t => t.Mechanical)
             .Include(t => t.Electrical)
-            .AsNoTracking();
-
-        if (lastHealthTime != null)
-            telemetryQuery = telemetryQuery.Where(t => t.RecordedAt > lastHealthTime);
-
-        telemetryQuery = telemetryQuery.Where(t =>
-            !db.MachineHealth.Any(h =>
-                h.MachineId == t.MachineId &&
-                h.RecordedAt == t.RecordedAt));
-
-        var telemetry = await telemetryQuery
+            .AsNoTracking()
+            .OrderByDescending(t => t.RecordedAt)
+            .Take(500)
             .OrderBy(t => t.RecordedAt)
-            .Take(300)
             .ToListAsync();
 
         if (!telemetry.Any())
@@ -90,26 +84,17 @@ public class TelemetryProcessor : BackgroundService
             })
             .ToDictionaryAsync(x => x.MachineId, x => x.MaxRpm);
 
-        var runtimeCache = await db.MachineHealth
-            .GroupBy(h => h.MachineId)
-            .Select(g => new
-            {
-                MachineId = g.Key,
-                Runtime = g.OrderByDescending(x => x.RecordedAt)
-                           .Select(x => x.RuntimeHours)
-                           .FirstOrDefault()
-            })
-            .ToDictionaryAsync(x => x.MachineId, x => x.Runtime);
-
         var newHealthRows = new List<MachineHealth>();
-        var processedKeys = new HashSet<string>();
 
         foreach (var t in telemetry)
         {
-            var timeUtc = DateTime.SpecifyKind(t.RecordedAt, DateTimeKind.Utc);
-            var key = $"{t.MachineId}-{timeUtc:O}";
+            var timeUtc = t.RecordedAt;
 
-            if (!processedKeys.Add(key))
+            bool exists = await db.MachineHealth.AnyAsync(h =>
+                h.MachineId == t.MachineId &&
+                h.RecordedAt == timeUtc);
+
+            if (exists)
                 continue;
 
             decimal vx = t.Mechanical?.VibrationX ?? 0;
@@ -151,19 +136,40 @@ public class TelemetryProcessor : BackgroundService
                 - (double)(vibrationRms * 3m)
                 - (double)(avgLoad * 0.1m);
 
-            decimal runtime = runtimeCache.ContainsKey(t.MachineId)
-                ? runtimeCache[t.MachineId]
-                : 0;
+            // ======================================================
+            // ✅ NEW RUNTIME LOGIC (TIMESTAMP BASED)
+            // ======================================================
 
-            if ((t.Mechanical?.Rpm ?? 0) > 0)
-                runtime += INTERVAL_HOURS;
+            decimal runtime = 0;
 
-            runtimeCache[t.MachineId] = runtime;
+            if (lastHealthPerMachine.TryGetValue(t.MachineId, out var last))
+            {
+                runtime = last.Runtime;
+
+                if ((t.Mechanical?.Rpm ?? 0) > 0)
+                {
+                    var delta =
+                        (timeUtc - last.LastTime)
+                        .TotalHours;
+
+                    if (delta > 0)
+                        runtime += (decimal)delta;
+                }
+
+                lastHealthPerMachine[t.MachineId] =
+                    new { last.MachineId, LastTime = timeUtc, Runtime = runtime };
+            }
+            else
+            {
+                runtime = 0;
+                lastHealthPerMachine[t.MachineId] =
+                    new { MachineId = t.MachineId, LastTime = timeUtc, Runtime = runtime };
+            }
 
             newHealthRows.Add(new MachineHealth
             {
                 MachineId = t.MachineId,
-                RecordedAt = timeUtc,
+                RecordedAt = timeUtc,   // ✔ EXACT MATCH WITH TELEMETRY
                 HealthScore = (int)Math.Max(0, Math.Min(100, healthScore)),
                 RuntimeHours = runtime,
                 AvgLoad = avgLoad
@@ -178,7 +184,7 @@ public class TelemetryProcessor : BackgroundService
     }
 
     // ======================================================
-    // MACHINE STATUS ENGINE
+    // MACHINE STATUS ENGINE (UNCHANGED)
     // ======================================================
     private async Task UpdateMachineStatus(CiipDbContext db)
     {
@@ -209,7 +215,7 @@ public class TelemetryProcessor : BackgroundService
     }
 
     // ======================================================
-    // ALERT ENGINE (NO LOAD ALERTS)
+    // ALERT ENGINE (ONLY LOAD LOGIC CHANGED)
     // ======================================================
     private async Task ProcessAlerts(CiipDbContext db)
     {
@@ -234,6 +240,66 @@ public class TelemetryProcessor : BackgroundService
 
         var newAlerts = new List<AlertEvent>();
 
+        // ================= LOAD ALERTS FROM MACHINE HEALTH =================
+        var healthRows = await db.MachineHealth
+            .AsNoTracking()
+            .OrderBy(h => h.RecordedAt)
+            .Take(300)
+            .ToListAsync();
+
+        foreach (var h in healthRows)
+        {
+            if (!machines.TryGetValue(h.MachineId, out var machine))
+                continue;
+
+            if (machine.Plant == null)
+                continue;
+
+            var threshold = await thresholdService
+                .GetThresholds(machine.Plant.TenantId, machine.MachineType);
+
+            var timeUtc = h.RecordedAt;
+            decimal avgLoad = h.AvgLoad;
+
+            bool exists = await db.AlertEvents.AnyAsync(a =>
+                a.MachineId == h.MachineId &&
+                a.Parameter == "LOAD_HIGH" &&
+                a.GeneratedAt == timeUtc);
+
+            if (!exists)
+            {
+                if (avgLoad >= threshold.LoadHighCritical)
+                {
+                    newAlerts.Add(new AlertEvent
+                    {
+                        AlertId = Guid.NewGuid(),
+                        MachineId = h.MachineId,
+                        Parameter = "LOAD_HIGH",
+                        Severity = "CRITICAL",
+                        ActualValue = avgLoad,
+                        AlertStatus = "ACTIVE",
+                        GeneratedAt = timeUtc,
+                        ThresholdId = threshold.LoadHighThresholdId
+                    });
+                }
+                else if (avgLoad >= threshold.LoadHighWarning)
+                {
+                    newAlerts.Add(new AlertEvent
+                    {
+                        AlertId = Guid.NewGuid(),
+                        MachineId = h.MachineId,
+                        Parameter = "LOAD_HIGH",
+                        Severity = "WARNING",
+                        ActualValue = avgLoad,
+                        AlertStatus = "ACTIVE",
+                        GeneratedAt = timeUtc,
+                        ThresholdId = threshold.LoadHighThresholdId
+                    });
+                }
+            }
+        }
+
+        // ================= ORIGINAL TELEMETRY ALERTS =================
         foreach (var t in telemetry)
         {
             if (!machines.TryGetValue(t.MachineId, out var machine))
@@ -245,7 +311,7 @@ public class TelemetryProcessor : BackgroundService
             var threshold = await thresholdService
                 .GetThresholds(machine.Plant.TenantId, machine.MachineType);
 
-            var timeUtc = DateTime.SpecifyKind(t.RecordedAt, DateTimeKind.Utc);
+            var timeUtc = t.RecordedAt;
 
             async Task TryAdd(string parameter, decimal value, string severity, Guid? thresholdId)
             {

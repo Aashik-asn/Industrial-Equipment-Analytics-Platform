@@ -20,6 +20,12 @@ public class ThresholdConfig
     public decimal TemperatureWarning { get; set; }
     public decimal TemperatureCritical { get; set; }
 
+    public decimal LoadHighWarning { get; set; }
+    public decimal LoadHighCritical { get; set; }
+
+    public decimal LoadLowWarning { get; set; }
+    public decimal LoadLowCritical { get; set; }
+
 
     // =========================
     // VERSION LOCK (VERY IMPORTANT)
@@ -30,5 +36,8 @@ public class ThresholdConfig
     public Guid? RpmHighThresholdId { get; set; }
 
     public Guid? TemperatureThresholdId { get; set; }
+
+    public Guid? LoadHighThresholdId { get; set; }
+    public Guid? LoadLowThresholdId { get; set; }
 
 }

@@ -32,6 +32,19 @@ public class CiipDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        base.OnModelCreating(modelBuilder);
+
+        modelBuilder.Entity<TelemetryIngestion>()
+            .Property(x => x.RecordedAt)
+            .HasColumnType("timestamp without time zone");
+
+        modelBuilder.Entity<MachineHealth>()
+            .Property(x => x.RecordedAt)
+            .HasColumnType("timestamp without time zone");
+
+        modelBuilder.Entity<AlertEvent>()
+            .Property(x => x.GeneratedAt)
+            .HasColumnType("timestamp without time zone");
         // ✅ Composite Key
         modelBuilder.Entity<EndpointMachineMap>()
             .HasKey(x => new { x.EndpointId, x.MachineId });
