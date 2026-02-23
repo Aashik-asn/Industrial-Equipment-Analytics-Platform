@@ -1,6 +1,7 @@
 ﻿using CIIP.Backend.Data;
 using CIIP.Backend.Entities;
 using Microsoft.EntityFrameworkCore;
+using System;
 
 namespace CIIP.Backend.Services;
 
@@ -22,7 +23,7 @@ public class PlantDashboardService
         var result = new PlantDashboardResponse();
 
         // ======================================================
-        // BASE MACHINE QUERY
+        // MACHINES
         // ======================================================
         var machines = await _db.Machines
             .Include(m => m.Plant)
@@ -34,11 +35,11 @@ public class PlantDashboardService
 
         result.TotalMachines = machines.Count;
 
-        result.ActiveMachines = machines.Count(x =>
-            x.Status != null && x.Status == "RUNNING");
+        result.ActiveMachines =
+            machines.Count(x => x.Status == "RUNNING");
 
         // ======================================================
-        // MACHINE HEALTH (LATEST SNAPSHOT)
+        // MACHINE HEALTH SNAPSHOT
         // ======================================================
         var healthQuery = _db.MachineHealth
             .Where(h => machineIds.Contains(h.MachineId));
@@ -55,106 +56,114 @@ public class PlantDashboardService
             .Select(g => g.OrderByDescending(x => x.RecordedAt).First())
             .ToListAsync();
 
-        result.PlantEfficiency = latestHealth.Any()
+        result.PlantEfficiency =
+            latestHealth.Any()
             ? (double)latestHealth.Average(x => x.HealthScore)
             : 0;
 
-        result.AvgRuntime = latestHealth.Any()
+        result.AvgRuntime =
+            latestHealth.Any()
             ? (double)latestHealth.Average(x => x.RuntimeHours)
             : 0;
 
         // ======================================================
-        // ENERGY TREND
+        // ⭐ ENERGY TREND (REAL ENERGY TABLE)
         // ======================================================
-        var energyQuery = _db.TelemetryElectrical
-            .Include(e => e.Ingestion)
-            .Where(e => e.Ingestion != null &&
-                        machineIds.Contains(e.Ingestion.MachineId));
+        var energyQuery =
+            from e in _db.TelemetryEnergy.AsNoTracking()
+            join i in _db.TelemetryIngestions.AsNoTracking()
+                on e.IngestionId equals i.IngestionId
+            where machineIds.Contains(i.MachineId)
+            select new { e, i };
 
         if (from.HasValue)
-            energyQuery = energyQuery.Where(e =>
-                e.Ingestion!.RecordedAt >= from.Value);
+            energyQuery = energyQuery.Where(x => x.i.RecordedAt >= from.Value);
 
         if (to.HasValue)
-            energyQuery = energyQuery.Where(e =>
-                e.Ingestion!.RecordedAt <= to.Value);
+            energyQuery = energyQuery.Where(x => x.i.RecordedAt <= to.Value);
 
         result.EnergyTrend = await energyQuery
-            .OrderBy(x => x.Ingestion!.RecordedAt)
+            .OrderByDescending(x => x.i.RecordedAt)
+            .Take(12) // last 24hrs
             .Select(x => new EnergyTrendPoint
             {
-                Time = x.Ingestion!.RecordedAt,
-                Energy =
-                    (x.RVoltage ?? 0)
-                    + (x.YVoltage ?? 0)
-                    + (x.BVoltage ?? 0)
+                Time = x.i.RecordedAt,
+                Energy = x.e.EnergyImportKwh ?? 0
             })
-            .Take(24)
             .ToListAsync();
 
         result.TotalEnergy = result.EnergyTrend.Sum(x => x.Energy);
 
         // ======================================================
-        // PRODUCTION TREND (DERIVED FROM MACHINE HEALTH)
+        // ⭐ PRODUCTION TREND (INDUSTRIAL DERIVED)
         // ======================================================
-        var productionQuery = _db.MachineHealth
-            .Where(h => machineIds.Contains(h.MachineId));
+        var productionData = await _db.MachineHealth
+            .Where(h => machineIds.Contains(h.MachineId))
+            .OrderByDescending(x => x.RecordedAt)
+            .Take(12)
+            .AsNoTracking()
+            .ToListAsync();
 
-        if (from.HasValue)
-            productionQuery = productionQuery.Where(x => x.RecordedAt >= from.Value);
-
-        if (to.HasValue)
-            productionQuery = productionQuery.Where(x => x.RecordedAt <= to.Value);
-
-        result.ProductionTrend = await productionQuery
+        result.ProductionTrend = productionData
             .OrderBy(x => x.RecordedAt)
             .Select(x => new ProductionTrendPoint
             {
                 Time = x.RecordedAt,
 
-                // ⭐ Derived production logic
-                Actual = x.AvgLoad * 10,
-                Target = x.AvgLoad * 11
+                // Actual = Load × Runtime delta factor
+                Actual = x.AvgLoad * 0.8m,
+
+                // Target = Ideal load baseline
+                Target = 80
             })
-            .Take(30)
-            .ToListAsync();
+            .ToList();
 
         // ======================================================
-        // UPTIME VS DOWNTIME (REAL CALCULATION)
+        // ⭐ UPTIME VS DOWNTIME (LAST 336 RECORDS)
         // ======================================================
-        var healthRecords = await _db.MachineHealth
+        var lastHealthRecords = await _db.MachineHealth
             .Where(h => machineIds.Contains(h.MachineId))
+            .OrderByDescending(x => x.RecordedAt)
+            .Take(336)
             .AsNoTracking()
             .ToListAsync();
 
         result.UptimeDowntime = machines.Select(m =>
         {
-            var machineHealth = healthRecords
-                .Where(h => h.MachineId == m.MachineId)
-                .OrderByDescending(x => x.RecordedAt)
-                .FirstOrDefault();
+            var records = lastHealthRecords
+                .Where(x => x.MachineId == m.MachineId)
+                .OrderBy(x => x.RecordedAt)
+                .ToList();
 
-            decimal runtime = machineHealth?.RuntimeHours ?? 0;
+            if (!records.Any())
+                return new UptimePoint
+                {
+                    Label = m.MachineCode,
+                    Uptime = 0,
+                    Downtime = 100
+                };
 
-            // Assume 24h dashboard window
-            decimal totalHours = 24;
+            decimal runtimeDelta =
+                records.Last().RuntimeHours -
+                records.First().RuntimeHours;
 
-            decimal uptimePercent = totalHours == 0
+            decimal totalWindowHours = 336 * 2m; // your 2hr ingestion window
+
+            decimal uptimePercent =
+                totalWindowHours == 0
                 ? 0
-                : Math.Min(100, (runtime / totalHours) * 100);
-
-            decimal downtimePercent = 100 - uptimePercent;
+                : Math.Min(100, (runtimeDelta / totalWindowHours) * 100);
 
             return new UptimePoint
             {
                 Label = m.MachineCode,
                 Uptime = (double)uptimePercent,
-                Downtime = (double)downtimePercent
+                Downtime = (double)(100 - uptimePercent)
             };
         }).ToList();
 
         // ======================================================
-        // MACHINE STATUS OVERVIEW CARDS
+        // MACHINE OVERVIEW CARDS
         // ======================================================
         result.Machines = machines.Select(m =>
         {

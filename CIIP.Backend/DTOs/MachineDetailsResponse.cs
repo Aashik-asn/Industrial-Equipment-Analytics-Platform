@@ -12,7 +12,8 @@ public class MachineDetailsResponse
 
     public List<TrendPoint> HealthTrend { get; set; } = new();
     public List<TrendPoint> LoadTrend { get; set; } = new();
-    public List<TrendPoint> VibrationTrend { get; set; } = new();
+    public List<VibrationTrendPoint> VibrationTrend { get; set; } = new();
+
     public List<TrendPoint> PowerConsumptionTrend { get; set; } = new();
     public List<TrendPoint> TemperatureTrend { get; set; } = new();
 
@@ -31,6 +32,14 @@ public class TrendPoint
     public DateTime Time { get; set; }
     public decimal Value { get; set; }
 }
+public class VibrationTrendPoint
+{
+    public DateTime Time { get; set; }
+    public decimal VibrationX { get; set; }
+    public decimal VibrationY { get; set; }
+    public decimal VibrationZ { get; set; }
+}
+
 
 public class AlertSummary
 {

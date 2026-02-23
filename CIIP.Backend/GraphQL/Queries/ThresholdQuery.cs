@@ -16,9 +16,7 @@ public class ThresholdQuery
         string machineType,
         [Service] CiipDbContext db)
     {
-        var tenantId = Guid.Parse(
-            user.FindFirst("tenantId")!.Value
-        );
+        var tenantId = Guid.Parse(user.FindFirst("tenantId")!.Value);
 
         var rows = await db.AlertThresholds
             .AsNoTracking()
@@ -52,7 +50,8 @@ public class ThresholdQuery
 
         var parameters = new[]
         {
-            "Vibration","Current","RPM_LOW","RPM_HIGH","Temperature"
+            "Vibration","Current","RPM_LOW","RPM_HIGH","Temperature",
+            "LOAD_LOW","LOAD_HIGH"
         };
 
         return parameters

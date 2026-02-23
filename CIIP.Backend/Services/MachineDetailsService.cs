@@ -24,6 +24,7 @@ public class MachineDetailsService
         // MACHINE INFO
         // ======================================================
         var machine = await _db.Machines
+            .AsNoTracking()
             .FirstOrDefaultAsync(x => x.MachineId == machineId);
 
         if (machine == null)
@@ -35,9 +36,10 @@ public class MachineDetailsService
         result.Status = machine.Status;
 
         // ======================================================
-        // HEALTH DATA (LAST 12)
+        // MACHINE HEALTH (LAST 12 RECORDS)
         // ======================================================
         var healthData = await _db.MachineHealth
+            .AsNoTracking()
             .Where(x => x.MachineId == machineId)
             .OrderByDescending(x => x.RecordedAt)
             .Take(12)
@@ -47,7 +49,7 @@ public class MachineDetailsService
         var latestHealth = healthData.LastOrDefault();
 
         result.HealthScore = latestHealth?.HealthScore ?? 0;
-        result.RuntimeHours = (double)(latestHealth?.RuntimeHours ?? 0);
+        result.RuntimeHours = (double)(latestHealth?.RuntimeHours ?? 0m);
 
         result.HealthTrend = healthData.Select(x => new TrendPoint
         {
@@ -62,46 +64,53 @@ public class MachineDetailsService
         }).ToList();
 
         // ======================================================
-        // VIBRATION TREND (LAST 12)
+        // ⭐ TRUE INDUSTRIAL VIBRATION TREND (OEE STYLE STRUCTURE)
         // ======================================================
         var mechanicalTrend = await _db.TelemetryMechanical
             .Include(x => x.Ingestion)
-            .Where(x => x.Ingestion != null && x.Ingestion.MachineId == machineId)
+            .AsNoTracking()
+            .Where(x => x.Ingestion != null &&
+                        x.Ingestion.MachineId == machineId)
             .OrderByDescending(x => x.Ingestion!.RecordedAt)
             .Take(12)
             .OrderBy(x => x.Ingestion!.RecordedAt)
             .ToListAsync();
 
-        result.VibrationTrend = mechanicalTrend.Select(x => new TrendPoint
+        result.VibrationTrend = mechanicalTrend.Select(x => new VibrationTrendPoint
         {
             Time = x.Ingestion!.RecordedAt,
-            Value = x.VibrationX ?? 0m
+            VibrationX = x.VibrationX ?? 0m,
+            VibrationY = x.VibrationY ?? 0m,
+            VibrationZ = x.VibrationZ ?? 0m
         }).ToList();
 
         // ======================================================
-        // POWER CONSUMPTION TREND (LAST 12)  -> FROM TELEMETRY_ENERGY
+        // POWER TREND (FROM TELEMETRY ENERGY)
         // ======================================================
-        var powerTrend = await _db.TelemetryEnergy
+        var energyTrend = await _db.TelemetryEnergy
             .Include(x => x.Ingestion)
-            .Where(x => x.Ingestion != null && x.Ingestion.MachineId == machineId)
+            .AsNoTracking()
+            .Where(x => x.Ingestion != null &&
+                        x.Ingestion.MachineId == machineId)
             .OrderByDescending(x => x.Ingestion!.RecordedAt)
             .Take(12)
             .OrderBy(x => x.Ingestion!.RecordedAt)
             .ToListAsync();
 
-        result.PowerConsumptionTrend = powerTrend.Select(x => new TrendPoint
+        result.PowerConsumptionTrend = energyTrend.Select(x => new TrendPoint
         {
             Time = x.Ingestion!.RecordedAt,
-            Value = x.EnergyImportKwh ?? 0m   // ✅ since PowerConsumption column doesn't exist
+            Value = x.EnergyImportKwh ?? 0m
         }).ToList();
 
-
         // ======================================================
-        // TEMPERATURE TREND (LAST 12)
+        // TEMPERATURE TREND
         // ======================================================
         var tempTrend = await _db.TelemetryEnvironmental
             .Include(x => x.Ingestion)
-            .Where(x => x.Ingestion != null && x.Ingestion.MachineId == machineId)
+            .AsNoTracking()
+            .Where(x => x.Ingestion != null &&
+                        x.Ingestion.MachineId == machineId)
             .OrderByDescending(x => x.Ingestion!.RecordedAt)
             .Take(12)
             .OrderBy(x => x.Ingestion!.RecordedAt)
@@ -114,34 +123,20 @@ public class MachineDetailsService
         }).ToList();
 
         // ======================================================
-        // LATEST TELEMETRY SNAPSHOTS
+        // LATEST SNAPSHOTS
         // ======================================================
         var latestElectrical = await _db.TelemetryElectrical
             .Include(x => x.Ingestion)
-            .Where(x => x.Ingestion != null && x.Ingestion.MachineId == machineId)
-            .OrderByDescending(x => x.Ingestion!.RecordedAt)
-            .FirstOrDefaultAsync();
-        var latestEnergy = await _db.TelemetryEnergy
-            .Include(x => x.Ingestion)
-            .Where(x => x.Ingestion != null && x.Ingestion.MachineId == machineId)
+            .AsNoTracking()
+            .Where(x => x.Ingestion != null &&
+                        x.Ingestion.MachineId == machineId)
             .OrderByDescending(x => x.Ingestion!.RecordedAt)
             .FirstOrDefaultAsync();
 
-        var latestEnv = await _db.TelemetryEnvironmental
-            .Include(x => x.Ingestion)
-            .Where(x => x.Ingestion != null && x.Ingestion.MachineId == machineId)
-            .OrderByDescending(x => x.Ingestion!.RecordedAt)
-            .FirstOrDefaultAsync();
+        var latestEnergy = energyTrend.LastOrDefault();
+        var latestEnv = tempTrend.LastOrDefault();
+        var latestMechanical = mechanicalTrend.LastOrDefault();
 
-        var latestMechanical = await _db.TelemetryMechanical
-            .Include(x => x.Ingestion)
-            .Where(x => x.Ingestion != null && x.Ingestion.MachineId == machineId)
-            .OrderByDescending(x => x.Ingestion!.RecordedAt)
-            .FirstOrDefaultAsync();
-
-        // ======================================================
-        // ELECTRICAL SNAPSHOT
-        // ======================================================
         if (latestElectrical != null)
         {
             result.Electrical = new ElectricalSnapshot
@@ -154,16 +149,12 @@ public class MachineDetailsService
                 BCurrent = latestElectrical.BCurrent ?? 0m,
                 PowerFactor = latestElectrical.PowerFactor ?? 0m,
                 Frequency = latestElectrical.Frequency ?? 0m,
-
-                EnergyImportKwh = latestEnergy.EnergyImportKwh ?? 0m,
-                EnergyExportKwh = latestEnergy.EnergyExportKwh ?? 0m,
-                EnergyImportKvah = latestEnergy.EnergyImportKvah ?? 0m
+                EnergyImportKwh = latestEnergy?.EnergyImportKwh ?? 0m,
+                EnergyExportKwh = latestEnergy?.EnergyExportKwh ?? 0m,
+                EnergyImportKvah = latestEnergy?.EnergyImportKvah ?? 0m
             };
         }
 
-        // ======================================================
-        // ENVIRONMENTAL SNAPSHOT
-        // ======================================================
         if (latestEnv != null)
         {
             result.Environmental = new EnvironmentalSnapshot
@@ -175,9 +166,6 @@ public class MachineDetailsService
             };
         }
 
-        // ======================================================
-        // MECHANICAL SNAPSHOT
-        // ======================================================
         if (latestMechanical != null)
         {
             result.Mechanical = new MechanicalSnapshot
@@ -190,21 +178,46 @@ public class MachineDetailsService
         }
 
         // ======================================================
-        // SYSTEM HEALTH INDICATORS
+        // INDUSTRIAL RMS VIBRATION
         // ======================================================
+        decimal rms = 0m;
+
+        if (latestMechanical != null)
+        {
+            decimal vx = latestMechanical.VibrationX ?? 0m;
+            decimal vy = latestMechanical.VibrationY ?? 0m;
+            decimal vz = latestMechanical.VibrationZ ?? 0m;
+
+            rms = (decimal)Math.Sqrt(
+                (double)((vx * vx + vy * vy + vz * vz) / 3m));
+        }
+
+        // ======================================================
+        // SYSTEM HEALTH (INDUSTRIAL LOGIC)
+        // ======================================================
+        decimal avgLoad = healthData.Any()
+            ? healthData.Average(x => x.AvgLoad)
+            : 0m;
+
         result.SystemHealth = new SystemHealthIndicators
         {
             OverallHealth = result.HealthScore,
-            PerformanceIndex = result.LoadTrend.Any()
-                ? (double)result.LoadTrend.Average(x => x.Value)
+
+            PerformanceIndex = healthData.Any()
+                ? (double)avgLoad
                 : 0,
-            EfficiencyScore = (double)((latestElectrical?.PowerFactor ?? 0m) * 100)
+
+            EfficiencyScore =
+                (double)((latestElectrical?.PowerFactor ?? 0m) * 100m)
+                - (double)(rms * 2m)
+                - (double)(avgLoad * 0.05m)
         };
 
         // ======================================================
         // ALERTS
         // ======================================================
         result.Alerts = await _db.AlertEvents
+            .AsNoTracking()
             .Where(x => x.MachineId == machineId)
             .OrderByDescending(x => x.GeneratedAt)
             .Take(20)
