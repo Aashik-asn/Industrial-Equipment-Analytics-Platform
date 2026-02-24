@@ -10,14 +10,23 @@ public class MachineDetailsQuery
 
     [Authorize]
     public async Task<MachineDetailsResponse> MachineDetails(
-        ClaimsPrincipal user,
-        Guid plantId,
-        Guid machineId,
-        [Service] MachineDetailsService service)
+    ClaimsPrincipal user,
+    Guid plantId,
+    Guid machineId,
+    DateTime? from,
+    DateTime? to,
+    [Service] MachineDetailsService service)
     {
         var tenantId = Guid.Parse(
-        user.FindFirst("tenantId")!.Value
+            user.FindFirst("tenantId")!.Value
         );
-        return await service.GetMachineDetails(tenantId, plantId, machineId);
+
+        return await service.GetMachineDetails(
+            tenantId,
+            plantId,
+            machineId,
+            from,
+            to
+        );
     }
 }

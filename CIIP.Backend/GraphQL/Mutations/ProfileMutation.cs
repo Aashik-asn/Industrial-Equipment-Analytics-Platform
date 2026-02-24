@@ -9,6 +9,33 @@ namespace CIIP.Backend.GraphQL.Mutations;
 public class ProfileMutation
 {
     // ======================================================
+    // INTERNAL HELPERS (NO NEW FILE NEEDED)
+    // ======================================================
+
+    private static Guid GetUserId(ClaimsPrincipal user)
+    {
+        var claim =
+            user.FindFirst(ClaimTypes.NameIdentifier) ??
+            user.FindFirst("sub") ??
+            user.FindFirst("userId");
+
+        if (claim == null)
+            throw new Exception("UserId claim missing in token.");
+
+        return Guid.Parse(claim.Value);
+    }
+
+    private static Guid GetTenantId(ClaimsPrincipal user)
+    {
+        var claim = user.FindFirst("tenantId");
+
+        if (claim == null)
+            throw new Exception("TenantId claim missing in token.");
+
+        return Guid.Parse(claim.Value);
+    }
+
+    // ======================================================
     // UPDATE PROFILE
     // ======================================================
 
@@ -18,9 +45,7 @@ public class ProfileMutation
         string email,
         [Service] ProfileService service)
     {
-        var userId = Guid.Parse(
-            user.FindFirst("userId")!.Value
-        );
+        var userId = GetUserId(user);
 
         return await service.UpdateProfile(userId, email);
     }
@@ -35,9 +60,7 @@ public class ProfileMutation
         string newPassword,
         [Service] ProfileService service)
     {
-        var userId = Guid.Parse(
-            user.FindFirst("userId")!.Value
-        );
+        var userId = GetUserId(user);
 
         return await service.ChangePassword(userId, newPassword);
     }
@@ -52,9 +75,7 @@ public class ProfileMutation
         string tenantName,
         [Service] ProfileService service)
     {
-        var tenantId = Guid.Parse(
-            user.FindFirst("tenantId")!.Value
-        );
+        var tenantId = GetTenantId(user);
 
         return await service.UpdateTenantName(tenantId, tenantName);
     }

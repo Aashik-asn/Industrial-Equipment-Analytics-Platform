@@ -16,12 +16,14 @@ public class MachineDetailsService
     public async Task<MachineDetailsResponse> GetMachineDetails(
         Guid tenantId,
         Guid plantId,
-        Guid machineId)
+        Guid machineId,
+        DateTime? from,
+        DateTime? to)
     {
         var result = new MachineDetailsResponse();
 
         // ======================================================
-        // MACHINE INFO
+        // MACHINE INFO (NOT AFFECTED BY CALENDAR)
         // ======================================================
         var machine = await _db.Machines
             .AsNoTracking()
@@ -36,96 +38,144 @@ public class MachineDetailsService
         result.Status = machine.Status;
 
         // ======================================================
-        // MACHINE HEALTH (LAST 12 RECORDS)
+        // INDUSTRIAL CALENDAR ENGINE (TREND ONLY)
         // ======================================================
-        var healthData = await _db.MachineHealth
-            .AsNoTracking()
-            .Where(x => x.MachineId == machineId)
-            .OrderByDescending(x => x.RecordedAt)
-            .Take(12)
-            .OrderBy(x => x.RecordedAt)
-            .ToListAsync();
 
-        var latestHealth = healthData.LastOrDefault();
+        DateTime? fromLocal = from.HasValue
+            ? DateTime.SpecifyKind(from.Value, DateTimeKind.Unspecified)
+            : null;
+
+        DateTime? toLocal = to.HasValue
+            ? DateTime.SpecifyKind(to.Value, DateTimeKind.Unspecified)
+            : null;
+
+        bool hourlyMode = true;
+
+        if (fromLocal.HasValue && toLocal.HasValue)
+        {
+            var diffDays = (toLocal.Value.Date - fromLocal.Value.Date).TotalDays;
+            if (diffDays > 1)
+                hourlyMode = false;
+        }
+
+        // NULL CALENDAR → LATEST FULL DAY ONLY
+        if (!fromLocal.HasValue && !toLocal.HasValue)
+        {
+            var latest = await _db.TelemetryEnergy
+                .Where(x => x.Ingestion != null &&
+                            x.Ingestion.MachineId == machineId)
+                .MaxAsync(x => (DateTime?)x.Ingestion!.RecordedAt);
+
+            if (latest.HasValue)
+            {
+                var latestDate = latest.Value.Date;
+
+                fromLocal = new DateTime(
+                    latestDate.Year,
+                    latestDate.Month,
+                    latestDate.Day,
+                    0, 0, 0,
+                    DateTimeKind.Unspecified);
+
+                toLocal = new DateTime(
+                    latestDate.Year,
+                    latestDate.Month,
+                    latestDate.Day,
+                    23, 59, 59,
+                    DateTimeKind.Unspecified);
+
+                hourlyMode = true;
+            }
+        }
+
+        // ======================================================
+        // HEALTH + LOAD TREND (CALENDAR CONTROLLED)
+        // ======================================================
+
+        var healthQuery = _db.MachineHealth
+            .AsNoTracking()
+            .Where(x => x.MachineId == machineId);
+
+        if (fromLocal.HasValue && toLocal.HasValue)
+        {
+            healthQuery = healthQuery.Where(x =>
+                x.RecordedAt >= fromLocal.Value &&
+                x.RecordedAt <= toLocal.Value);
+        }
+
+        var healthData = await healthQuery.ToListAsync();
+
+        var groupedHealth = hourlyMode
+            ? healthData.GroupBy(x =>
+                new DateTime(x.RecordedAt.Year,
+                             x.RecordedAt.Month,
+                             x.RecordedAt.Day,
+                             x.RecordedAt.Hour, 0, 0))
+            : healthData.GroupBy(x => x.RecordedAt.Date);
+
+        result.HealthTrend = groupedHealth
+            .OrderBy(g => g.Key)
+            .Select(g => new TrendPoint
+            {
+                Time = g.Key,
+                Value = (decimal)g.Average(x => x.HealthScore)
+            }).ToList();
+
+        result.LoadTrend = groupedHealth
+            .OrderBy(g => g.Key)
+            .Select(g => new TrendPoint
+            {
+                Time = g.Key,
+                Value = g.Average(x => x.AvgLoad)
+            }).ToList();
+
+        var latestHealth = await _db.MachineHealth
+        .AsNoTracking()
+        .Where(x => x.MachineId == machineId)
+        .OrderByDescending(x => x.RecordedAt)
+        .FirstOrDefaultAsync();
 
         result.HealthScore = latestHealth?.HealthScore ?? 0;
         result.RuntimeHours = (double)(latestHealth?.RuntimeHours ?? 0m);
 
-        result.HealthTrend = healthData.Select(x => new TrendPoint
-        {
-            Time = x.RecordedAt,
-            Value = x.HealthScore
-        }).ToList();
-
-        result.LoadTrend = healthData.Select(x => new TrendPoint
-        {
-            Time = x.RecordedAt,
-            Value = x.AvgLoad
-        }).ToList();
-
         // ======================================================
-        // ⭐ TRUE INDUSTRIAL VIBRATION TREND (OEE STYLE STRUCTURE)
+        // VIBRATION TREND (CALENDAR CONTROLLED)
         // ======================================================
-        var mechanicalTrend = await _db.TelemetryMechanical
+
+        var mechanicalQuery = _db.TelemetryMechanical
             .Include(x => x.Ingestion)
             .AsNoTracking()
             .Where(x => x.Ingestion != null &&
-                        x.Ingestion.MachineId == machineId)
-            .OrderByDescending(x => x.Ingestion!.RecordedAt)
-            .Take(12)
-            .OrderBy(x => x.Ingestion!.RecordedAt)
-            .ToListAsync();
+                        x.Ingestion.MachineId == machineId);
 
-        result.VibrationTrend = mechanicalTrend.Select(x => new VibrationTrendPoint
+        if (fromLocal.HasValue && toLocal.HasValue)
         {
-            Time = x.Ingestion!.RecordedAt,
-            VibrationX = x.VibrationX ?? 0m,
-            VibrationY = x.VibrationY ?? 0m,
-            VibrationZ = x.VibrationZ ?? 0m
-        }).ToList();
+            mechanicalQuery = mechanicalQuery.Where(x =>
+                x.Ingestion!.RecordedAt >= fromLocal.Value &&
+                x.Ingestion!.RecordedAt <= toLocal.Value);
+        }
 
-        // ======================================================
-        // POWER TREND (FROM TELEMETRY ENERGY)
-        // ======================================================
-        var energyTrend = await _db.TelemetryEnergy
-            .Include(x => x.Ingestion)
-            .AsNoTracking()
-            .Where(x => x.Ingestion != null &&
-                        x.Ingestion.MachineId == machineId)
-            .OrderByDescending(x => x.Ingestion!.RecordedAt)
-            .Take(12)
-            .OrderBy(x => x.Ingestion!.RecordedAt)
-            .ToListAsync();
+        var mechanicalData = await mechanicalQuery.ToListAsync();
 
-        result.PowerConsumptionTrend = energyTrend.Select(x => new TrendPoint
-        {
-            Time = x.Ingestion!.RecordedAt,
-            Value = x.EnergyImportKwh ?? 0m
-        }).ToList();
+        var groupedMechanical = hourlyMode
+            ? mechanicalData.GroupBy(x =>
+                new DateTime(x.Ingestion!.RecordedAt.Year,
+                             x.Ingestion.RecordedAt.Month,
+                             x.Ingestion.RecordedAt.Day,
+                             x.Ingestion.RecordedAt.Hour, 0, 0))
+            : mechanicalData.GroupBy(x => x.Ingestion!.RecordedAt.Date);
 
-        // ======================================================
-        // TEMPERATURE TREND
-        // ======================================================
-        var tempTrend = await _db.TelemetryEnvironmental
-            .Include(x => x.Ingestion)
-            .AsNoTracking()
-            .Where(x => x.Ingestion != null &&
-                        x.Ingestion.MachineId == machineId)
-            .OrderByDescending(x => x.Ingestion!.RecordedAt)
-            .Take(12)
-            .OrderBy(x => x.Ingestion!.RecordedAt)
-            .ToListAsync();
+        result.VibrationTrend = groupedMechanical
+            .OrderBy(g => g.Key)
+            .Select(g => new VibrationTrendPoint
+            {
+                Time = g.Key,
+                VibrationX = (decimal)g.Average(x => (double)(x.VibrationX ?? 0m)),
+                VibrationY = (decimal)g.Average(x => (double)(x.VibrationY ?? 0m)),
+                VibrationZ = (decimal)g.Average(x => (double)(x.VibrationZ ?? 0m))
+            }).ToList();
 
-        result.TemperatureTrend = tempTrend.Select(x => new TrendPoint
-        {
-            Time = x.Ingestion!.RecordedAt,
-            Value = x.Temperature ?? 0m
-        }).ToList();
-
-        // ======================================================
-        // LATEST SNAPSHOTS
-        // ======================================================
-        var latestElectrical = await _db.TelemetryElectrical
+        var latestMechanical = await _db.TelemetryMechanical
             .Include(x => x.Ingestion)
             .AsNoTracking()
             .Where(x => x.Ingestion != null &&
@@ -133,9 +183,103 @@ public class MachineDetailsService
             .OrderByDescending(x => x.Ingestion!.RecordedAt)
             .FirstOrDefaultAsync();
 
-        var latestEnergy = energyTrend.LastOrDefault();
-        var latestEnv = tempTrend.LastOrDefault();
-        var latestMechanical = mechanicalTrend.LastOrDefault();
+        // ======================================================
+        // POWER TREND (CALENDAR CONTROLLED)
+        // ======================================================
+
+        var energyQuery = _db.TelemetryEnergy
+            .Include(x => x.Ingestion)
+            .AsNoTracking()
+            .Where(x => x.Ingestion != null &&
+                        x.Ingestion.MachineId == machineId);
+
+        if (fromLocal.HasValue && toLocal.HasValue)
+        {
+            energyQuery = energyQuery.Where(x =>
+                x.Ingestion!.RecordedAt >= fromLocal.Value &&
+                x.Ingestion!.RecordedAt <= toLocal.Value);
+        }
+
+        var energyData = await energyQuery.ToListAsync();
+
+        var groupedEnergy = hourlyMode
+            ? energyData.GroupBy(x =>
+                new DateTime(x.Ingestion!.RecordedAt.Year,
+                             x.Ingestion.RecordedAt.Month,
+                             x.Ingestion.RecordedAt.Day,
+                             x.Ingestion.RecordedAt.Hour, 0, 0))
+            : energyData.GroupBy(x => x.Ingestion!.RecordedAt.Date);
+
+        result.PowerConsumptionTrend = groupedEnergy
+            .OrderBy(g => g.Key)
+            .Select(g => new TrendPoint
+            {
+                Time = g.Key,
+                Value = (decimal)g.Sum(x => (double)(x.EnergyImportKwh ?? 0m))
+            }).ToList();
+
+        var latestEnergy = await _db.TelemetryEnergy
+        .Include(x => x.Ingestion)
+        .AsNoTracking()
+        .Where(x => x.Ingestion != null &&
+                    x.Ingestion.MachineId == machineId)
+        .OrderByDescending(x => x.Ingestion!.RecordedAt)
+        .FirstOrDefaultAsync();
+
+        // ======================================================
+        // TEMPERATURE TREND (CALENDAR CONTROLLED)
+        // ======================================================
+
+        var tempQuery = _db.TelemetryEnvironmental
+            .Include(x => x.Ingestion)
+            .AsNoTracking()
+            .Where(x => x.Ingestion != null &&
+                        x.Ingestion.MachineId == machineId);
+
+        if (fromLocal.HasValue && toLocal.HasValue)
+        {
+            tempQuery = tempQuery.Where(x =>
+                x.Ingestion!.RecordedAt >= fromLocal.Value &&
+                x.Ingestion!.RecordedAt <= toLocal.Value);
+        }
+
+        var tempData = await tempQuery.ToListAsync();
+
+        var groupedTemp = hourlyMode
+            ? tempData.GroupBy(x =>
+                new DateTime(x.Ingestion!.RecordedAt.Year,
+                             x.Ingestion.RecordedAt.Month,
+                             x.Ingestion.RecordedAt.Day,
+                             x.Ingestion.RecordedAt.Hour, 0, 0))
+            : tempData.GroupBy(x => x.Ingestion!.RecordedAt.Date);
+
+        result.TemperatureTrend = groupedTemp
+            .OrderBy(g => g.Key)
+            .Select(g => new TrendPoint
+            {
+                Time = g.Key,
+                Value = (decimal)g.Average(x => (double)(x.Temperature ?? 0m))
+            }).ToList();
+
+        var latestEnv = await _db.TelemetryEnvironmental
+            .Include(x => x.Ingestion)
+            .AsNoTracking()
+            .Where(x => x.Ingestion != null &&
+                        x.Ingestion.MachineId == machineId)
+            .OrderByDescending(x => x.Ingestion!.RecordedAt)
+            .FirstOrDefaultAsync();
+
+        // ======================================================
+        // SNAPSHOTS (NOT CALENDAR CONTROLLED)
+        // ======================================================
+
+        var latestElectrical = await _db.TelemetryElectrical
+            .Include(x => x.Ingestion)
+            .AsNoTracking()
+            .Where(x => x.Ingestion != null &&
+                        x.Ingestion.MachineId == machineId)
+            .OrderByDescending(x => x.Ingestion!.RecordedAt)
+            .FirstOrDefaultAsync();
 
         if (latestElectrical != null)
         {
@@ -180,6 +324,7 @@ public class MachineDetailsService
         // ======================================================
         // INDUSTRIAL RMS VIBRATION
         // ======================================================
+
         decimal rms = 0m;
 
         if (latestMechanical != null)
@@ -193,19 +338,25 @@ public class MachineDetailsService
         }
 
         // ======================================================
-        // SYSTEM HEALTH (INDUSTRIAL LOGIC)
+        // SYSTEM HEALTH (NOT CALENDAR CONTROLLED)
         // ======================================================
-        decimal avgLoad = healthData.Any()
-            ? healthData.Average(x => x.AvgLoad)
+
+        var latestHealthAll = await _db.MachineHealth
+    .AsNoTracking()
+    .Where(x => x.MachineId == machineId)
+    .ToListAsync();
+
+        decimal avgLoad = latestHealthAll.Any()
+            ? latestHealthAll.Average(x => x.AvgLoad)
             : 0m;
 
         result.SystemHealth = new SystemHealthIndicators
         {
             OverallHealth = result.HealthScore,
 
-            PerformanceIndex = healthData.Any()
-                ? (double)avgLoad
-                : 0,
+            PerformanceIndex = latestHealthAll.Any()
+            ? (double)avgLoad
+            : 0,
 
             EfficiencyScore =
                 (double)((latestElectrical?.PowerFactor ?? 0m) * 100m)
@@ -214,8 +365,9 @@ public class MachineDetailsService
         };
 
         // ======================================================
-        // ALERTS
+        // ALERTS (NOT CALENDAR CONTROLLED)
         // ======================================================
+
         result.Alerts = await _db.AlertEvents
             .AsNoTracking()
             .Where(x => x.MachineId == machineId)

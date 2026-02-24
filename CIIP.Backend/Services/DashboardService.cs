@@ -22,7 +22,27 @@ public class DashboardService
         var result = new DashboardResponse();
 
         // ====================================================
-        // ⭐ PLANT + MACHINE FILTER
+        // 🔥 NORMALIZE DATETIME (timestamp without timezone)
+        // ====================================================
+        DateTime? fromLocal = from.HasValue
+            ? DateTime.SpecifyKind(from.Value, DateTimeKind.Unspecified)
+            : null;
+
+        DateTime? toLocal = to.HasValue
+            ? DateTime.SpecifyKind(to.Value, DateTimeKind.Unspecified)
+            : null;
+
+        bool hourlyMode = true;
+
+        if (fromLocal.HasValue && toLocal.HasValue)
+        {
+            var diffDays = (toLocal.Value.Date - fromLocal.Value.Date).TotalDays;
+            if (diffDays > 1)
+                hourlyMode = false;
+        }
+
+        // ====================================================
+        // ⭐ PLANTS + MACHINES
         // ====================================================
         var plants = _db.Plants
             .AsNoTracking()
@@ -48,30 +68,68 @@ public class DashboardService
             await machines.CountAsync(x => x.Status == "RUNNING");
 
         // ====================================================
-        // ⭐ ACTIVE ALERTS CARD
-        // ====================================================
-        result.ActiveAlerts = await _db.AlertEvents
-            .AsNoTracking()
-            .Where(a => machineIds.Contains(a.MachineId))
-            .Select(a => a.AlertId)
-            .Distinct()
-            .CountAsync();
-
-        // ====================================================
-        // ⭐ HEALTH BASE QUERY (CORE SOURCE)
+        // ⭐ HEALTH BASE QUERY
         // ====================================================
         var healthQuery = _db.MachineHealth
             .AsNoTracking()
             .Where(h => machineIds.Contains(h.MachineId));
 
-        if (from != null)
-            healthQuery = healthQuery.Where(h => h.RecordedAt >= from);
+        if (fromLocal.HasValue)
+            healthQuery = healthQuery.Where(h => h.RecordedAt >= fromLocal.Value);
 
-        if (to != null)
-            healthQuery = healthQuery.Where(h => h.RecordedAt <= to);
+        if (toLocal.HasValue)
+            healthQuery = healthQuery.Where(h => h.RecordedAt <= toLocal.Value);
 
         // ====================================================
-        // ⭐ AVG EFFICIENCY CARD
+        // ⭐ NULL FILTER → LATEST DAY ONLY
+        // ====================================================
+        if (!fromLocal.HasValue && !toLocal.HasValue)
+        {
+            var latestDate = await healthQuery
+                .OrderByDescending(h => h.RecordedAt)
+                .Select(h => h.RecordedAt.Date)
+                .FirstOrDefaultAsync();
+
+            fromLocal = latestDate;
+            toLocal = latestDate.AddDays(1).AddTicks(-1);
+
+            healthQuery = healthQuery
+                .Where(h => h.RecordedAt >= fromLocal && h.RecordedAt <= toLocal);
+
+            hourlyMode = true;
+        }
+
+        // ====================================================
+        // ⭐ ALERTS (USES GeneratedAt)
+        // ====================================================
+        var alertQuery = _db.AlertEvents
+            .AsNoTracking()
+            .Where(a =>
+                machineIds.Contains(a.MachineId) &&
+                a.AlertStatus == "ACTIVE");
+
+        if (fromLocal.HasValue)
+            alertQuery = alertQuery.Where(a => a.GeneratedAt >= fromLocal.Value);
+
+        if (toLocal.HasValue)
+            alertQuery = alertQuery.Where(a => a.GeneratedAt <= toLocal.Value);
+
+        result.ActiveAlerts = await alertQuery
+            .Select(a => a.AlertId)
+            .Distinct()
+            .CountAsync();
+
+        result.AlertDistribution = await alertQuery
+            .GroupBy(x => x.Severity)
+            .Select(g => new AlertSeverityDto
+            {
+                Severity = g.Key!,
+                Count = g.Count()
+            })
+            .ToListAsync();
+
+        // ====================================================
+        // ⭐ AVG EFFICIENCY
         // ====================================================
         var latestHealthValues = await healthQuery
             .GroupBy(h => h.MachineId)
@@ -85,49 +143,57 @@ public class DashboardService
             latestHealthValues.Where(x => x != null).Average() ?? 0;
 
         // ====================================================
-        // ⭐ ALERT DONUT
+        // ⭐ OEE TREND (CALENDAR AWARE)
         // ====================================================
-        result.AlertDistribution = await _db.AlertEvents
-            .AsNoTracking()
-            .Where(a => machineIds.Contains(a.MachineId))
-            .GroupBy(x => x.Severity)
-            .Select(g => new AlertSeverityDto
-            {
-                Severity = g.Key!,
-                Count = g.Count()
-            })
-            .ToListAsync();
+        if (hourlyMode)
+        {
+            result.OeeTrend = await healthQuery
+                .GroupBy(h => new DateTime(
+                    h.RecordedAt.Year,
+                    h.RecordedAt.Month,
+                    h.RecordedAt.Day,
+                    h.RecordedAt.Hour,
+                    0,
+                    0))
+                .Select(g => new OeePoint
+                {
+                    Time = g.Key,
+                    Availability = (double)Math.Min(100m,
+                        (g.OrderByDescending(x => x.RecordedAt)
+                         .Select(x => x.RuntimeHours)
+                         .FirstOrDefault() % 10m) * 10m),
+
+                    Performance = (double)Math.Min(100m,
+                        g.Average(x => x.AvgLoad)),
+
+                    Quality = (double)g.Average(x => x.HealthScore)
+                })
+                .OrderBy(x => x.Time)
+                .ToListAsync();
+        }
+        else
+        {
+            result.OeeTrend = await healthQuery
+                .GroupBy(h => h.RecordedAt.Date)
+                .Select(g => new OeePoint
+                {
+                    Time = g.Key,
+                    Availability = (double)Math.Min(100m,
+                        (g.OrderByDescending(x => x.RecordedAt)
+                         .Select(x => x.RuntimeHours)
+                         .FirstOrDefault() % 10m) * 10m),
+
+                    Performance = (double)Math.Min(100m,
+                        g.Average(x => x.AvgLoad)),
+
+                    Quality = (double)g.Average(x => x.HealthScore)
+                })
+                .OrderBy(x => x.Time)
+                .ToListAsync();
+        }
 
         // ====================================================
-        // ⭐ LAST 12 HEALTH RECORDS (24HRS BASE)
-        // ====================================================
-        var last12Health = await healthQuery
-            .OrderByDescending(h => h.RecordedAt)
-            .Take(12)
-            .ToListAsync();
-
-        // ====================================================
-        // ⭐ OEE TREND (INDUSTRIAL DERIVED)
-        // ====================================================
-        result.OeeTrend = last12Health
-            .OrderBy(h => h.RecordedAt)
-            .Select(h => new OeePoint
-            {
-                Time = h.RecordedAt,
-
-                // Availability → runtime progression
-                Availability = (double)Math.Min(100m, h.RuntimeHours * 10m),
-
-                // Performance → electrical load behaviour
-                Performance = (double)Math.Min(100m, h.AvgLoad * 4m),
-
-                // Quality → machine health degradation
-                Quality = (double)h.HealthScore
-            })
-            .ToList();
-
-        // ====================================================
-        // ⭐ ENERGY TREND (LAST 12)
+        // ⭐ ENERGY TREND
         // ====================================================
         var energyQuery =
             from e in _db.TelemetryEnergy.AsNoTracking()
@@ -136,55 +202,88 @@ public class DashboardService
             where machineIds.Contains(i.MachineId)
             select new { e, i };
 
-        if (from != null)
-            energyQuery = energyQuery.Where(x => x.i.RecordedAt >= from);
+        if (fromLocal.HasValue)
+            energyQuery = energyQuery.Where(x => x.i.RecordedAt >= fromLocal.Value);
 
-        if (to != null)
-            energyQuery = energyQuery.Where(x => x.i.RecordedAt <= to);
+        if (toLocal.HasValue)
+            energyQuery = energyQuery.Where(x => x.i.RecordedAt <= toLocal.Value);
 
-        result.EnergyTrend = await energyQuery
-            .OrderByDescending(x => x.i.RecordedAt)
-            .Take(12)
-            .Select(x => new EnergyPoint
-            {
-                Time = x.i.RecordedAt,
-                Energy = (double)x.e.EnergyImportKwh
-            })
-            .OrderBy(x => x.Time)
-            .ToListAsync();
+        if (hourlyMode)
+        {
+            result.EnergyTrend = await energyQuery
+                .GroupBy(x => new DateTime(
+                    x.i.RecordedAt.Year,
+                    x.i.RecordedAt.Month,
+                    x.i.RecordedAt.Day,
+                    x.i.RecordedAt.Hour, 0, 0))
+                .Select(g => new EnergyPoint
+                {
+                    Time = g.Key,
+                    Energy = (double)g.Sum(x => x.e.EnergyImportKwh ?? 0)
+                })
+                .OrderBy(x => x.Time)
+                .ToListAsync();
+        }
+        else
+        {
+            result.EnergyTrend = await energyQuery
+                .GroupBy(x => x.i.RecordedAt.Date)
+                .Select(g => new EnergyPoint
+                {
+                    Time = g.Key,
+                    Energy = (double)g.Sum(x => x.e.EnergyImportKwh ?? 0)
+                })
+                .OrderBy(x => x.Time)
+                .ToListAsync();
+        }
 
         // ====================================================
-        // ⭐ PRODUCTION VS TARGET (LOAD-BASED INDUSTRIAL)
+        // ⭐ PRODUCTION TREND
         // ====================================================
-        result.ProductionTrend = last12Health
-            .OrderBy(h => h.RecordedAt)
-            .Select(h => new ProductionPoint
-            {
-                Time = h.RecordedAt,
-
-                // Actual production proportional to load
-                Actual = (double)(h.AvgLoad * 10m),
-
-                // Target slightly above load capability
-                Target = (double)(h.AvgLoad * 11m)
-            })
-            .ToList();
+        if (hourlyMode)
+        {
+            result.ProductionTrend = await healthQuery
+                .GroupBy(h => new DateTime(
+                    h.RecordedAt.Year,
+                    h.RecordedAt.Month,
+                    h.RecordedAt.Day,
+                    h.RecordedAt.Hour, 0, 0))
+                .Select(g => new ProductionPoint
+                {
+                    Time = g.Key,
+                    Actual = (double)g.Average(x => x.AvgLoad) * 10,
+                    Target = 800
+                })
+                .OrderBy(x => x.Time)
+                .ToListAsync();
+        }
+        else
+        {
+            result.ProductionTrend = await healthQuery
+                .GroupBy(h => h.RecordedAt.Date)
+                .Select(g => new ProductionPoint
+                {
+                    Time = g.Key,
+                    Actual = (double)g.Average(x => x.AvgLoad) * 10,
+                    Target = 800
+                })
+                .OrderBy(x => x.Time)
+                .ToListAsync();
+        }
 
         // ====================================================
-        // ⭐ PLANT CARDS (EFFICIENCY PER PLANT)
+        // ⭐ PLANT CARDS
         // ====================================================
         result.Plants = await plants
             .Select(p => new PlantCardDto
             {
                 PlantId = p.PlantId,
                 PlantName = p.PlantName,
-                Machines = p.Machines.Count(),
+                Machines = p.Machines.Count,
 
                 Efficiency =
                     _db.MachineHealth
-                        .Where(h => p.Machines
-                            .Select(m => m.MachineId)
-                            .Contains(h.MachineId))
+                        .Where(h => h.Machine.PlantId == p.PlantId)
                         .GroupBy(h => h.MachineId)
                         .Select(g => g
                             .OrderByDescending(x => x.RecordedAt)

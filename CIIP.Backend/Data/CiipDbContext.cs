@@ -27,12 +27,15 @@ public class CiipDbContext : DbContext
     public DbSet<AlertEvent> AlertEvents => Set<AlertEvent>();
     public DbSet<AlertAcknowledgement> AlertAcknowledgements => Set<AlertAcknowledgement>();
     public DbSet<MachineHealth> MachineHealth => Set<MachineHealth>();
-
     public DbSet<AlertThreshold> AlertThresholds => Set<AlertThreshold>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        // ======================================================
+        // ✅ TIMESTAMP FIX (NO TIMEZONE)
+        // ======================================================
 
         modelBuilder.Entity<TelemetryIngestion>()
             .Property(x => x.RecordedAt)
@@ -45,16 +48,47 @@ public class CiipDbContext : DbContext
         modelBuilder.Entity<AlertEvent>()
             .Property(x => x.GeneratedAt)
             .HasColumnType("timestamp without time zone");
-        // ✅ Composite Key
+
+
+        // ======================================================
+        // ✅ DECIMAL PRECISION FIX (PERMANENT)
+        // Prevents "Value too large for decimal"
+        // ======================================================
+
+        // -------- MACHINE HEALTH --------
+        modelBuilder.Entity<MachineHealth>().Property(x => x.AvgLoad).HasPrecision(10, 4);
+        modelBuilder.Entity<MachineHealth>().Property(x => x.RuntimeHours).HasPrecision(12, 2);
+        modelBuilder.Entity<MachineHealth>().Property(x => x.HealthScore).HasPrecision(5, 2);
+
+        // -------- ALERT THRESHOLD (REAL DB STRUCTURE) --------
+        modelBuilder.Entity<AlertThreshold>().Property(x => x.WarningValue).HasPrecision(10, 3);
+        modelBuilder.Entity<AlertThreshold>().Property(x => x.CriticalValue).HasPrecision(10, 3);
+
+        // -------- ELECTRICAL --------
+        modelBuilder.Entity<TelemetryElectrical>().Property(x => x.RCurrent).HasPrecision(10, 3);
+        modelBuilder.Entity<TelemetryElectrical>().Property(x => x.YCurrent).HasPrecision(10, 3);
+        modelBuilder.Entity<TelemetryElectrical>().Property(x => x.BCurrent).HasPrecision(10, 3);
+        modelBuilder.Entity<TelemetryElectrical>().Property(x => x.PowerFactor).HasPrecision(6, 3);
+
+        // -------- MECHANICAL --------
+        modelBuilder.Entity<TelemetryMechanical>().Property(x => x.Rpm).HasPrecision(12, 3);
+        modelBuilder.Entity<TelemetryMechanical>().Property(x => x.VibrationX).HasPrecision(10, 4);
+        modelBuilder.Entity<TelemetryMechanical>().Property(x => x.VibrationY).HasPrecision(10, 4);
+        modelBuilder.Entity<TelemetryMechanical>().Property(x => x.VibrationZ).HasPrecision(10, 4);
+
+        // -------- ENERGY --------
+        modelBuilder.Entity<TelemetryEnergy>().Property(x => x.EnergyImportKwh).HasPrecision(18, 6);
+
+        // ======================================================
+        // KEYS & RELATIONS
+        // ======================================================
+
         modelBuilder.Entity<EndpointMachineMap>()
             .HasKey(x => new { x.EndpointId, x.MachineId });
 
-        // ✅ MachineHealth has no PK
         modelBuilder.Entity<MachineHealth>()
             .HasKey(x => new { x.MachineId, x.RecordedAt });
 
-
-        // ✅ Telemetry 1-to-1 mappings
         modelBuilder.Entity<TelemetryElectrical>()
             .HasOne(t => t.Ingestion)
             .WithOne(i => i.Electrical)
@@ -80,9 +114,6 @@ public class CiipDbContext : DbContext
             .WithOne(i => i.Mechanical)
             .HasForeignKey<TelemetryMechanical>(t => t.IngestionId);
 
-        // ✅ Alert acknowledgement 1-to-1
-        // ✅ Proper 1-to-1 mapping between AlertEvent and AlertAcknowledgement
-
         modelBuilder.Entity<AlertAcknowledgement>()
             .HasKey(a => a.AcknowledgementId);
 
@@ -93,7 +124,6 @@ public class CiipDbContext : DbContext
             .HasPrincipalKey<AlertEvent>(e => e.AlertId)
             .OnDelete(DeleteBehavior.Cascade);
 
-
         modelBuilder.Entity<AlertEvent>()
             .HasOne(a => a.AlertThreshold)
             .WithMany(t => t.Alerts)
@@ -101,12 +131,11 @@ public class CiipDbContext : DbContext
             .HasConstraintName("fk_alert_event_threshold")
             .OnDelete(DeleteBehavior.Restrict);
 
-
-
         modelBuilder.Entity<Plant>()
             .HasOne(p => p.Tenant)
             .WithMany(t => t.Plants)
             .HasForeignKey(p => p.TenantId);
+
         modelBuilder.Entity<Machine>()
             .HasOne(m => m.Plant)
             .WithMany(p => p.Machines)
@@ -126,6 +155,5 @@ public class CiipDbContext : DbContext
             .HasOne(a => a.Machine)
             .WithMany(m => m.Alerts)
             .HasForeignKey(a => a.MachineId);
-
     }
 }
