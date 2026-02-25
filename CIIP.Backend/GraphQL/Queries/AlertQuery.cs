@@ -53,4 +53,16 @@ public class AlertQuery
 
         return service.GetSummary(tenantId);
     }
+    [Authorize]
+    public async Task<AcknowledgedAlertDto?> AcknowledgedAlert(
+    ClaimsPrincipal user,
+    Guid alertId,
+    [Service] AlertService service)
+    {
+        var tenantId = Guid.Parse(
+            user.FindFirst("tenantId")!.Value
+        );
+
+        return await service.GetAcknowledgedAlert(tenantId, alertId);
+    }
 }

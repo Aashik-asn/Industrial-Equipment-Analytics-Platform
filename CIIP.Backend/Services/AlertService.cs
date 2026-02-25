@@ -104,6 +104,34 @@ public class AlertService
             Acknowledged = acknowledged
         };
     }
+    public async Task<AcknowledgedAlertDto?> GetAcknowledgedAlert(
+    Guid tenantId,
+    Guid alertId)
+    {
+        var query =
+            from aa in _db.AlertAcknowledgements
+            join ae in _db.AlertEvents
+                on aa.AlertId equals ae.AlertId
+            join m in _db.Machines
+                on ae.MachineId equals m.MachineId
+            join p in _db.Plants
+                on m.PlantId equals p.PlantId
+            where ae.AlertId == alertId
+                  && p.TenantId == tenantId
+            select new AcknowledgedAlertDto
+            {
+                AlertId = ae.AlertId,
+                Parameter = ae.Parameter,
+                PlantName = p.PlantName,
+                MachineCode = m.MachineCode,
+                TechnicianName = aa.TechnicianName,
+                Reason = aa.Reason,
+                ActionTaken = aa.ActionTaken,
+                AcknowledgedAt = aa.AcknowledgedAt
+            };
+
+        return await query.FirstOrDefaultAsync();
+    }
 
     // ======================================================
     // ACKNOWLEDGE ALERT

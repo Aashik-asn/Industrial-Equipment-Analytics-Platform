@@ -7,11 +7,6 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 
-
-
-
-
-
 var builder = WebApplication.CreateBuilder(args);
 
 // ======================================================
@@ -21,6 +16,20 @@ builder.Services.AddDbContext<CiipDbContext>(options =>
     options.UseNpgsql(
         builder.Configuration.GetConnectionString("DefaultConnection")
     ));
+
+// ======================================================
+// CORS   ADD THIS BLOCK (VERY IMPORTANT)
+// ======================================================
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFrontend", policy =>
+    {
+        policy
+            .WithOrigins("http://localhost:5173") // React dev server
+            .AllowAnyHeader()
+            .AllowAnyMethod();
+    });
+});
 
 // ======================================================
 // SERVICES
@@ -36,7 +45,6 @@ builder.Services.AddScoped<PlantService>();
 builder.Services.AddScoped<InfrastructureService>();
 builder.Services.AddScoped<JwtService>();
 
-// Background Telemetry Processor
 builder.Services.AddHostedService<TelemetryProcessor>();
 
 // ======================================================
@@ -45,29 +53,24 @@ builder.Services.AddHostedService<TelemetryProcessor>();
 builder.Services
     .AddGraphQLServer()
     .ModifyRequestOptions(opt => opt.IncludeExceptionDetails = true)
-    .AddAuthorization()   // REQUIRED FOR [Authorize]
-
+    .AddAuthorization()
     .AddQueryType<Query>()
     .AddMutationType<Mutation>()
-
     .AddTypeExtension<AuthMutation>()
     .AddTypeExtension<ProfileMutation>()
     .AddTypeExtension<AlertMutation>()
     .AddTypeExtension<ThresholdMutation>()
     .AddTypeExtension<PlantMutation>()
     .AddTypeExtension<InfrastructureMutation>()
-
     .AddTypeExtension<ProfileQuery>()
     .AddTypeExtension<DashboardQuery>()
     .AddTypeExtension<PlantDashboardQuery>()
     .AddTypeExtension<MachineDetailsQuery>()
     .AddTypeExtension<AlertQuery>()
     .AddTypeExtension<ThresholdQuery>()
-
     .AddFiltering()
     .AddSorting()
     .AddProjections();
-
 
 // ======================================================
 // JWT AUTHENTICATION
@@ -106,9 +109,11 @@ if (app.Environment.IsDevelopment())
 }
 
 // ======================================================
-// IMPORTANT ORDER — AUTH BEFORE GRAPHQL
+// IMPORTANT ORDER — AUTH + CORS BEFORE GRAPHQL
 // ======================================================
 app.UseRouting();
+
+app.UseCors("AllowFrontend");   // NOW THIS WILL WORK
 
 app.UseAuthentication();
 app.UseAuthorization();
