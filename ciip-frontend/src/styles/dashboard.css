@@ -1,0 +1,598 @@
+/* ============================================
+   DASHBOARD STYLES
+   ============================================ */
+
+.dashboard-container {
+  padding: 24px;
+  background-color: #f4f6f9;
+  min-height: 100%;
+}
+
+/* Dashboard Header Section */
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 32px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.dashboard-title-section {
+  flex: 1;
+}
+
+.dashboard-title {
+  font-size: 28px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 8px 0;
+}
+
+.dashboard-subtitle {
+  font-size: 14px;
+  color: #6b7280;
+  margin: 0;
+}
+
+/* Filters Section */
+.dashboard-filters {
+  display: flex;
+  gap: 16px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.filter-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #374151;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.filter-select {
+  padding: 10px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #374151;
+  background-color: #ffffff;
+  min-width: 180px;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+
+.filter-select:hover {
+  border-color: #9ca3af;
+}
+
+.filter-select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.filter-select:disabled {
+  background-color: #f3f4f6;
+  cursor: not-allowed;
+}
+
+.date-range-inputs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.filter-date {
+  padding: 10px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #374151;
+  background-color: #ffffff;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+
+.filter-date:hover {
+  border-color: #9ca3af;
+}
+
+.filter-date:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.date-separator {
+  color: #6b7280;
+  font-size: 14px;
+}
+
+/* Refresh Button */
+.refresh-button,
+.retry-button {
+  padding: 10px 20px;
+  background-color: #3b82f6;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.1s ease;
+  height: fit-content;
+}
+
+.refresh-button:hover,
+.retry-button:hover {
+  background-color: #2563eb;
+  transform: translateY(-1px);
+}
+
+.refresh-button:active,
+.retry-button:active {
+  transform: translateY(0);
+}
+
+.refresh-button:disabled,
+.retry-button:disabled {
+  background-color: #9ca3af;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Error Container */
+.error-container {
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 32px;
+}
+
+.error-container h3 {
+  color: #dc2626;
+  margin: 0 0 12px 0;
+  font-size: 16px;
+}
+
+.error-container p {
+  color: #991b1b;
+  margin: 4px 0;
+  font-size: 14px;
+}
+
+/* Loading State */
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  background-color: #ffffff;
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #e5e7eb;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loading-container p {
+  color: #6b7280;
+  font-size: 14px;
+  margin: 0;
+}
+
+/* Row 1: KPI Cards Grid */
+.kpi-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  margin-bottom: 32px;
+}
+
+.kpi-card {
+  background-color: #ffffff;
+  border-radius: 10px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.kpi-value {
+  font-size: 32px;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 8px;
+  line-height: 1;
+}
+
+.kpi-label {
+  font-size: 14px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+/* Quick Access Section - At the bottom, centered */
+.quick-access-section {
+  margin-top: 32px;
+  padding-top: 32px;
+  border-top: 2px solid #e5e7eb;
+}
+
+.quick-access-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #374151;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0 0 24px 0;
+  text-align: center;
+}
+
+.quick-access-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* Plant Card Styles - With Machines and Efficiency */
+.quick-access-card {
+  display: flex;
+  flex-direction: column;
+  width: 220px;
+  min-height: 120px;
+  padding: 20px;
+  background-color: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid #e5e7eb;
+}
+
+.quick-access-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  border-color: #3b82f6;
+}
+
+.plant-card-header {
+  text-align: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.plant-card-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.plant-card-stats {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex: 1;
+}
+
+.plant-stat-left,
+.plant-stat-right {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+}
+
+.plant-stat-left {
+  border-right: 1px solid #e5e7eb;
+  padding-right: 12px;
+}
+
+.plant-stat-right {
+  padding-left: 12px;
+}
+
+.plant-stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #3b82f6;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.plant-stat-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Charts Rows - Different flex ratios for each row */
+.charts-row {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 32px;
+}
+
+/* Row 2: OEE (3) + Alert (1) = 3:1 ratio */
+.row-oee-alert .chart-oee {
+  flex: 3;
+  min-width: 0;
+}
+
+.row-oee-alert .chart-alert {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Row 3: Production (1) + Energy (1) = 1:1 ratio */
+.row-production-energy .chart-production {
+  flex: 1;
+  min-width: 0;
+}
+
+.row-production-energy .chart-energy {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Common Chart Container Styles */
+.chart-container {
+  background-color: #ffffff;
+  border-radius: 10px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.chart-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 20px 0;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+/* Empty State */
+.empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 300px;
+  color: #9ca3af;
+  font-size: 14px;
+  background-color: #f9fafb;
+  border-radius: 8px;
+  border: 2px dashed #e5e7eb;
+}
+
+.empty-state-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  background-color: #ffffff;
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  text-align: center;
+}
+
+.empty-state-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.empty-state-container h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 8px 0;
+}
+
+.empty-state-container p {
+  font-size: 14px;
+  color: #6b7280;
+  margin: 0 0 16px 0;
+}
+
+/* Responsive Design */
+@media (max-width: 1200px) {
+  .kpi-cards-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .quick-access-grid {
+    gap: 16px;
+  }
+
+  .quick-access-card {
+    width: 200px;
+  }
+
+  .charts-row {
+    flex-direction: column;
+  }
+
+  .row-oee-alert .chart-oee,
+  .row-oee-alert .chart-alert,
+  .row-production-energy .chart-production,
+  .row-production-energy .chart-energy {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+}
+
+@media (max-width: 768px) {
+  .dashboard-container {
+    padding: 16px;
+  }
+
+  .dashboard-header {
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .dashboard-filters {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filter-group {
+    width: 100%;
+  }
+
+  .filter-select,
+  .date-range-inputs,
+  .refresh-button {
+    width: 100%;
+  }
+
+  .kpi-cards-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .quick-access-grid {
+    gap: 12px;
+  }
+
+  .quick-access-card {
+    width: 100%;
+    max-width: 280px;
+  }
+
+  .kpi-value {
+    font-size: 28px;
+  }
+
+  .chart-container {
+    padding: 16px;
+  }
+
+  .charts-row {
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+}
+
+/* Chart Tooltip Customization */
+.recharts-tooltip-wrapper {
+  outline: none;
+}
+
+/* Legend Customization */
+.recharts-legend-item {
+  font-size: 12px !important;
+  color: #6b7280 !important;
+}
+
+/* Axis Label Styling */
+.recharts-label {
+  font-size: 12px !important;
+  fill: '#6b7280' !important;
+}
+
+/* Alert Donut Chart Styles */
+.alert-donut-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+.alert-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+  width: 100%;
+  max-width: 200px;
+}
+
+.alert-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  padding: 6px 10px;
+  background-color: #f9fafb;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+}
+
+.alert-legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.alert-legend-severity {
+  font-weight: 500;
+  color: #374151;
+  flex: 1;
+}
+
+.alert-legend-count {
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.alert-legend-percentage {
+  color: #6b7280;
+  font-size: 12px;
+}
+
+/* Ensure X-axis labels are fully visible */
+.recharts-x-axis .recharts-cartesian-axis-tick-value {
+  font-size: 11px;
+}
+
+/* Improve chart visual appearance */
+.recharts-cartesian-grid-horizontal line,
+.recharts-cartesian-grid-vertical line {
+  stroke: #e5e7eb;
+}
+
+.recharts-line {
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+}
+

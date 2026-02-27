@@ -1,0 +1,6 @@
+/* Import all styles */
+@import './styles/layout.css';
+@import './styles/header.css';
+@import './styles/sidebar.css';
+@import './styles/login.css';
+@import './styles/register.css';

@@ -1,0 +1,238 @@
+/* ============================================
+   LOGIN PAGE STYLES - Blue Theme
+   ============================================ */
+
+/* Full page layout with sidebar-style left section */
+.login-page {
+  display: flex;
+  min-height: 100vh;
+  background-color: #f4f6f9;
+}
+
+/* Left side - Blue section with logo (like sidebar) */
+.login-left-section {
+  width: 400px;
+  background-color: #006499;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  position: relative;
+}
+
+.login-logo-container {
+  text-align: center;
+}
+
+.login-logo {
+  max-width: 280px;
+  max-height: 200px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  margin-bottom: 24px;
+}
+
+.login-brand-text {
+  color: #ffffff;
+  font-size: 24px;
+  font-weight: 600;
+  text-align: center;
+  line-height: 1.4;
+}
+
+.login-brand-subtext {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 14px;
+  margin-top: 8px;
+}
+
+/* Right side - Login form */
+.login-right-section {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+}
+
+.auth-container {
+  width: 100%;
+  max-width: 440px;
+}
+
+.auth-card {
+  background: white;
+  border-radius: 12px;
+  padding: 48px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  text-align: center;
+  border: 1px solid #e5e7eb;
+}
+
+.auth-card h2 {
+  margin-bottom: 32px;
+  color: #1f2937;
+  font-size: 28px;
+  font-weight: 600;
+}
+
+.form-group {
+  margin-bottom: 24px;
+  text-align: left;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  color: #374151;
+  font-weight: 500;
+  font-size: 15px;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 14px 18px;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 16px;
+  transition: all 0.2s ease;
+  background-color: #f9fafb;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #006499;
+  background-color: #ffffff;
+  box-shadow: 0 0 0 3px rgba(0, 100, 153, 0.1);
+}
+
+.password-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.password-input-wrapper input {
+  padding-right: 50px;
+}
+
+.toggle-password {
+  position: absolute;
+  right: 14px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.toggle-password:hover {
+  opacity: 1;
+}
+
+.toggle-password svg {
+  stroke: #6b7280;
+}
+
+/* Blue theme button */
+.auth-button {
+  width: 100%;
+  padding: 16px;
+  background-color: #006499;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 12px;
+}
+
+.auth-button:hover {
+  background-color: #004d73;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 100, 153, 0.3);
+}
+
+.auth-button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.error {
+  color: #dc2626;
+  font-size: 14px;
+  margin-top: 12px;
+  padding: 12px;
+  background-color: #fef2f2;
+  border-radius: 6px;
+  border: 1px solid #fecaca;
+}
+
+.auth-card p {
+  margin-top: 24px;
+  color: #6b7280;
+  font-size: 15px;
+}
+
+.auth-card a {
+  color: #006499;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.auth-card a:hover {
+  text-decoration: underline;
+  color: #004d73;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .login-left-section {
+    width: 300px;
+  }
+  
+  .login-logo {
+    max-width: 200px;
+  }
+}
+
+@media (max-width: 768px) {
+  .login-page {
+    flex-direction: column;
+  }
+  
+  .login-left-section {
+    width: 100%;
+    min-height: 200px;
+    padding: 32px 24px;
+  }
+  
+  .login-logo {
+    max-width: 160px;
+    max-height: 120px;
+  }
+  
+  .login-brand-text {
+    font-size: 20px;
+  }
+  
+  .login-right-section {
+    padding: 24px;
+  }
+  
+  .auth-card {
+    padding: 32px 24px;
+  }
+}
