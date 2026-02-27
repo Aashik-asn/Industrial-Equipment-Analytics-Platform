@@ -45,9 +45,10 @@ public class AuthService
     }
 
 
-    public async Task<UserAccount?> Login(string email, string passwordHash)
+    public async Task<UserAccount?> Login(string email, string password)
     {
         return await _db.UserAccounts
-            .FirstOrDefaultAsync(x => x.Email == email && x.PasswordHash == passwordHash);
+            .Include(u => u.Tenant)
+            .FirstOrDefaultAsync(x => x.Email == email && x.PasswordHash == password);
     }
 }

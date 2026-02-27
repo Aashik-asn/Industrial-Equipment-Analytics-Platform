@@ -5,6 +5,7 @@ public class DashboardResponse
     public int TotalActiveMachines { get; set; }
     public int ActiveAlerts { get; set; }
     public double AvgEfficiency { get; set; }
+    public double ProductionTargetPercentage { get; set; }
 
     public List<AlertSeverityDto> AlertDistribution { get; set; } = new();
     public List<EnergyPoint> EnergyTrend { get; set; } = new();

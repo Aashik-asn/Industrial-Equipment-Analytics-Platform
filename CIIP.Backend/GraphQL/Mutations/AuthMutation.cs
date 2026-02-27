@@ -23,10 +23,10 @@ public class AuthMutation
     // LOGIN WITH JWT TOKEN
     // ======================================================
     public async Task<LoginResponse?> Login(
-        string email,
-        string password,
-        [Service] AuthService service,
-        [Service] JwtService jwtService)
+    string email,
+    string password,
+    [Service] AuthService service,
+    [Service] JwtService jwtService)
     {
         var user = await service.Login(email, password);
 
@@ -40,7 +40,8 @@ public class AuthMutation
             Token = token,
             UserId = user.UserId,
             TenantId = user.TenantId,
-            Role = user.Role ?? "USER"
+            Role = user.Role ?? "USER",
+            TenantName = user.Tenant?.TenantName ?? ""   // ✅ Added
         };
     }
 }

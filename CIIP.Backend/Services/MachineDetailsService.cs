@@ -41,47 +41,61 @@ public class MachineDetailsService
         // INDUSTRIAL CALENDAR ENGINE (TREND ONLY)
         // ======================================================
 
-        DateTime? fromLocal = from.HasValue
-            ? DateTime.SpecifyKind(from.Value, DateTimeKind.Unspecified)
-            : null;
+        // ======================================================
+        // 🔥 PROPER INCLUSIVE DATE RANGE (SAME AS DASHBOARD)
+        // ======================================================
 
-        DateTime? toLocal = to.HasValue
-            ? DateTime.SpecifyKind(to.Value, DateTimeKind.Unspecified)
-            : null;
-
+        DateTime? fromLocal = null;
+        DateTime? toLocal = null;
         bool hourlyMode = true;
 
-        if (fromLocal.HasValue && toLocal.HasValue)
+        if (from.HasValue && to.HasValue)
         {
-            var diffDays = (toLocal.Value.Date - fromLocal.Value.Date).TotalDays;
-            if (diffDays > 1)
+            var fromValue = from.Value;
+            var toValue = to.Value;
+
+            // Convert UTC → Local if necessary
+            if (fromValue.Kind == DateTimeKind.Utc)
+                fromValue = fromValue.ToLocalTime();
+
+            if (toValue.Kind == DateTimeKind.Utc)
+                toValue = toValue.ToLocalTime();
+
+            var fromDate = fromValue.Date;
+            var toDate = toValue.Date;
+
+            fromLocal = DateTime.SpecifyKind(
+                fromDate,
+                DateTimeKind.Unspecified);
+
+            // exclusive upper bound
+            toLocal = DateTime.SpecifyKind(
+                toDate.AddDays(1),
+                DateTimeKind.Unspecified);
+
+            var inclusiveDays = (toDate - fromDate).Days + 1;
+
+            if (inclusiveDays == 1)
+                hourlyMode = true;
+            else
                 hourlyMode = false;
         }
-
-        // NULL CALENDAR → LATEST FULL DAY ONLY
-        if (!fromLocal.HasValue && !toLocal.HasValue)
+        else if (!from.HasValue && !to.HasValue)
         {
-            var latest = await _db.TelemetryEnergy
-                .Where(x => x.Ingestion != null &&
-                            x.Ingestion.MachineId == machineId)
-                .MaxAsync(x => (DateTime?)x.Ingestion!.RecordedAt);
+            var latest = await _db.TelemetryIngestions
+                .Where(x => x.MachineId == machineId)
+                .MaxAsync(x => (DateTime?)x.RecordedAt);
 
             if (latest.HasValue)
             {
                 var latestDate = latest.Value.Date;
 
-                fromLocal = new DateTime(
-                    latestDate.Year,
-                    latestDate.Month,
-                    latestDate.Day,
-                    0, 0, 0,
+                fromLocal = DateTime.SpecifyKind(
+                    latestDate,
                     DateTimeKind.Unspecified);
 
-                toLocal = new DateTime(
-                    latestDate.Year,
-                    latestDate.Month,
-                    latestDate.Day,
-                    23, 59, 59,
+                toLocal = DateTime.SpecifyKind(
+                    latestDate.AddDays(1),
                     DateTimeKind.Unspecified);
 
                 hourlyMode = true;

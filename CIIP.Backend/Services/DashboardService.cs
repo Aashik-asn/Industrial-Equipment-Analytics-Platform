@@ -22,22 +22,43 @@ public class DashboardService
         var result = new DashboardResponse();
 
         // ====================================================
-        // 🔥 NORMALIZE DATETIME (timestamp without timezone)
+        // 🔥 PROPER INCLUSIVE DATE RANGE (ENTERPRISE SAFE)
         // ====================================================
-        DateTime? fromLocal = from.HasValue
-            ? DateTime.SpecifyKind(from.Value, DateTimeKind.Unspecified)
-            : null;
 
-        DateTime? toLocal = to.HasValue
-            ? DateTime.SpecifyKind(to.Value, DateTimeKind.Unspecified)
-            : null;
-
+        DateTime? fromLocal = null;
+        DateTime? toLocal = null;
         bool hourlyMode = true;
 
-        if (fromLocal.HasValue && toLocal.HasValue)
+        if (from.HasValue && to.HasValue)
         {
-            var diffDays = (toLocal.Value.Date - fromLocal.Value.Date).TotalDays;
-            if (diffDays > 1)
+            var fromValue = from.Value;
+            var toValue = to.Value;
+
+            // Convert UTC → Local (important)
+            if (fromValue.Kind == DateTimeKind.Utc)
+                fromValue = fromValue.ToLocalTime();
+
+            if (toValue.Kind == DateTimeKind.Utc)
+                toValue = toValue.ToLocalTime();
+
+            var fromDate = fromValue.Date;
+            var toDate = toValue.Date;
+
+            // Start of from day
+            fromLocal = DateTime.SpecifyKind(
+                fromDate,
+                DateTimeKind.Unspecified);
+
+            // Start of NEXT day (exclusive upper bound)
+            toLocal = DateTime.SpecifyKind(
+                toDate.AddDays(1),
+                DateTimeKind.Unspecified);
+
+            var inclusiveDays = (toDate - fromDate).Days + 1;
+
+            if (inclusiveDays == 1)
+                hourlyMode = true;
+            else
                 hourlyMode = false;
         }
 
@@ -269,6 +290,25 @@ public class DashboardService
                 })
                 .OrderBy(x => x.Time)
                 .ToListAsync();
+        }
+
+        // ====================================================
+        // ⭐ PRODUCTION TARGET CARD (Derived From ProductionTrend)
+        // ====================================================
+
+        if (result.ProductionTrend.Any())
+        {
+            var totalActual = result.ProductionTrend.Sum(x => x.Actual);
+            var totalTarget = result.ProductionTrend.Sum(x => x.Target);
+
+            result.ProductionTargetPercentage =
+                totalTarget == 0
+                    ? 0
+                    : Math.Round((totalActual / totalTarget) * 100, 2);
+        }
+        else
+        {
+            result.ProductionTargetPercentage = 0;
         }
 
         // ====================================================

@@ -22,22 +22,43 @@ public class PlantDashboardService
         var result = new PlantDashboardResponse();
 
         // ======================================================
-        // 🔥 Normalize DateTime (timestamp WITHOUT timezone)
+        // 🔥 PROPER UTC → LOCAL DATE NORMALIZATION
         // ======================================================
-        DateTime? fromLocal = from.HasValue
-            ? DateTime.SpecifyKind(from.Value, DateTimeKind.Unspecified)
-            : null;
 
-        DateTime? toLocal = to.HasValue
-            ? DateTime.SpecifyKind(to.Value, DateTimeKind.Unspecified)
-            : null;
-
+        DateTime? fromLocal = null;
+        DateTime? toLocal = null;
         bool hourlyMode = true;
 
-        if (fromLocal.HasValue && toLocal.HasValue)
+        if (from.HasValue && to.HasValue)
         {
-            var diffDays = (toLocal.Value.Date - fromLocal.Value.Date).TotalDays;
-            if (diffDays > 1)
+            var fromValue = from.Value;
+            var toValue = to.Value;
+
+            // Convert UTC → Local if needed
+            if (fromValue.Kind == DateTimeKind.Utc)
+                fromValue = fromValue.ToLocalTime();
+
+            if (toValue.Kind == DateTimeKind.Utc)
+                toValue = toValue.ToLocalTime();
+
+            var fromDate = fromValue.Date;
+            var toDate = toValue.Date;
+
+            // START OF DAY
+            fromLocal = DateTime.SpecifyKind(
+                fromDate,
+                DateTimeKind.Unspecified);
+
+            // END OF DAY (inclusive)
+            toLocal = DateTime.SpecifyKind(
+                toDate.AddDays(1).AddTicks(-1),
+                DateTimeKind.Unspecified);
+
+            var inclusiveDays = (toDate - fromDate).Days + 1;
+
+            if (inclusiveDays == 1)
+                hourlyMode = true;
+            else
                 hourlyMode = false;
         }
 

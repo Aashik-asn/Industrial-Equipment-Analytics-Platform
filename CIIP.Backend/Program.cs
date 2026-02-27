@@ -25,7 +25,16 @@ builder.Services.AddCors(options =>
     options.AddPolicy("AllowFrontend", policy =>
     {
         policy
-            .WithOrigins("http://localhost:5173") // React dev server
+            .WithOrigins(
+                "http://localhost:5173",
+                "http://localhost:5174", 
+                "http://localhost:5175",
+                "http://localhost:5176",
+                "http://localhost:5177",
+                "http://localhost:50429",
+                "http://localhost:5178",
+                "http://localhost:5188"
+            ) // React dev server ports
             .AllowAnyHeader()
             .AllowAnyMethod();
     });
@@ -109,7 +118,7 @@ if (app.Environment.IsDevelopment())
 }
 
 // ======================================================
-// IMPORTANT ORDER — AUTH + CORS BEFORE GRAPHQL
+// IMPORTANT ORDER ï¿½ AUTH + CORS BEFORE GRAPHQL
 // ======================================================
 app.UseRouting();
 

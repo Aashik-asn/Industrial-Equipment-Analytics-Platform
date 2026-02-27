@@ -6,4 +6,5 @@ public class LoginResponse
     public Guid UserId { get; set; }
     public Guid TenantId { get; set; }
     public string Role { get; set; } = default!;
+    public string TenantName { get; set; } = default!;
 }
