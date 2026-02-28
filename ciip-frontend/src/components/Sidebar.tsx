@@ -44,15 +44,15 @@ const Sidebar = () => {
       <div className="sidebar-logo">
         <img src={logo} alt="Company Logo" className="logo-image" />
       </div>
-      
+
       <nav className="sidebar-nav">
         <h3 className="nav-section-title">Menu</h3>
         <ul className="nav-list">
           {/* Dashboard */}
           <li className="nav-item">
-            <NavLink 
-              to="/dashboard" 
-              className={({ isActive }) => 
+            <NavLink
+              to="/dashboard"
+              className={({ isActive }) =>
                 isActive ? 'nav-link active' : 'nav-link'
               }
             >
@@ -63,7 +63,7 @@ const Sidebar = () => {
 
           {/* Plant Dashboard - Collapsible Section */}
           <li className="nav-item">
-            <div 
+            <div
               className={`nav-link collapsible ${isPlantDashboardActive ? 'active' : ''}`}
               onClick={togglePlantSection}
             >
@@ -90,9 +90,9 @@ const Sidebar = () => {
 
           {/* Alert Management */}
           <li className="nav-item">
-            <NavLink 
-              to="/alerts" 
-              className={({ isActive }) => 
+            <NavLink
+              to="/alerts"
+              className={({ isActive }) =>
                 isActive ? 'nav-link active' : 'nav-link'
               }
             >
@@ -103,9 +103,9 @@ const Sidebar = () => {
 
           {/* Profile */}
           <li className="nav-item">
-            <NavLink 
-              to="/profile" 
-              className={({ isActive }) => 
+            <NavLink
+              to="/profile"
+              className={({ isActive }) =>
                 isActive ? 'nav-link active' : 'nav-link'
               }
             >

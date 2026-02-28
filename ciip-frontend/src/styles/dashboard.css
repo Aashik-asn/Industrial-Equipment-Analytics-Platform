@@ -214,16 +214,18 @@
 
 .kpi-card {
   background-color: #ffffff;
-  border-radius: 10px;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
   padding: 24px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
   border-left: 4px solid transparent;
 }
 
 .kpi-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transform: translateY(-4px) scale(1.01);
+  box-shadow: 0 12px 24px -8px rgba(0, 0, 0, 0.15);
+  border-color: #d1d5db;
 }
 
 /* KPI Card with Icon Layout */
@@ -437,9 +439,16 @@
 /* Common Chart Container Styles */
 .chart-container {
   background-color: #ffffff;
-  border-radius: 10px;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
   padding: 24px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.chart-container:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px -8px rgba(0, 0, 0, 0.15);
 }
 
 .chart-title {

@@ -100,6 +100,7 @@ export const MACHINE_DETAILS_QUERY = gql`
       alerts {
         parameter
         severity
+        status
       }
       electrical {
         rVoltage

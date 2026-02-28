@@ -181,16 +181,18 @@
 
 .plant-dashboard-container .kpi-card {
   background-color: #ffffff;
-  border-radius: 10px;
+  border-radius: 12px;
   padding: 24px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
   border-left: 4px solid transparent;
 }
 
 .plant-dashboard-container .kpi-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transform: translateY(-4px) scale(1.01);
+  box-shadow: 0 12px 24px -8px rgba(0, 0, 0, 0.15);
+  border-color: #d1d5db;
 }
 
 .plant-dashboard-container .kpi-card-icon {
@@ -286,9 +288,16 @@
 
 .plant-dashboard-container .chart-container {
   background-color: #ffffff;
-  border-radius: 10px;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
   padding: 24px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.plant-dashboard-container .chart-container:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px -8px rgba(0, 0, 0, 0.15);
 }
 
 .plant-dashboard-container .chart-title {
@@ -418,15 +427,16 @@
 .plant-dashboard-container .machine-card {
   background-color: #ffffff;
   border: 1px solid #e5e7eb;
-  border-radius: 10px;
+  border-radius: 12px;
   padding: 20px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s ease;
 }
 
 .plant-dashboard-container .machine-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  transform: translateY(-4px) scale(1.01);
+  box-shadow: 0 12px 24px -8px rgba(0, 0, 0, 0.15);
   border-color: #3b82f6;
 }
 
@@ -437,7 +447,7 @@
   margin-bottom: 12px;
 }
 
-.plant-dashboard-container .machine-card-header > div {
+.plant-dashboard-container .machine-card-header>div {
   display: flex;
   align-items: center;
 }
@@ -710,6 +720,7 @@
     opacity: 0;
     transform: translateY(10px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -719,10 +730,17 @@
 /* Section Card */
 .plant-dashboard-container .section-card {
   background-color: #ffffff;
-  border-radius: 10px;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
   padding: 24px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
   margin-bottom: 24px;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.plant-dashboard-container .section-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px -8px rgba(0, 0, 0, 0.15);
 }
 
 .plant-dashboard-container .section-title {
@@ -879,13 +897,13 @@
     width: 100%;
     overflow-x: auto;
   }
-  
+
   .plant-dashboard-container .tab-button {
     padding: 8px 16px;
     font-size: 13px;
     white-space: nowrap;
   }
-  
+
   .plant-dashboard-container .cards-row {
     grid-template-columns: 1fr;
   }
