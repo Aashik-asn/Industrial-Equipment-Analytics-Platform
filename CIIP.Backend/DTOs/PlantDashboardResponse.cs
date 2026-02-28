@@ -46,4 +46,6 @@ public class MachineOverviewCard
 
     public double HealthScore { get; set; }
     public double RuntimeHours { get; set; }
+    public double AvgLoad { get; set; }
+    public double CurrentLoad { get; set; }
 }

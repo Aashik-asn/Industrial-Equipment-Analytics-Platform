@@ -69,7 +69,7 @@ const formatDateFull = (dateString: string): string => {
 };
 
 const formatDateOnly = (dateString: string): string => {
-  return dayjs(dateString).format('YYYY-MM-DD');
+  return dayjs(dateString).format('YYYY-MM-dd');
 };
 
 const formatTimeOnly = (dateString: string): string => {
@@ -87,8 +87,8 @@ const COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6'];
 // Generate 4-hour interval ticks for the given date range
 const generateFourHourTicks = (fromDate: string, toDate: string): number[] => {
   const ticks: number[] = [];
-  let current = dayjs(fromDate).startOf('day'); // Start at 00:00
-  const end = dayjs(toDate).endOf('day'); // End at 23:59
+  let current = dayjs(fromDate).startOf('day');
+  const end = dayjs(toDate).endOf('day');
   
   while (current.isBefore(end) || current.isSame(end, 'day')) {
     ticks.push(current.valueOf());
@@ -178,7 +178,7 @@ const PlantDashboard = () => {
     return [Math.min(...times), Math.max(...times)];
   }, [dashboard?.oeeTrend]);
 
-  // Process data - keep original time string for category axis when multi-day
+  // Process data
   const processedData = useMemo(() => {
     if (!dashboard) return null;
     return {
@@ -221,7 +221,21 @@ const PlantDashboard = () => {
     }));
   };
 
+  // Get alert counts by severity
+  const getAlertCountsBySeverity = () => {
+    const counts = { critical: 0, warning: 0, others: 0 };
+    if (!dashboard?.alertDistribution) return counts;
+    dashboard.alertDistribution.forEach(item => {
+      const severity = item.severity?.toLowerCase() || '';
+      if (severity.includes('critical')) counts.critical += item.count;
+      else if (severity.includes('warning')) counts.warning += item.count;
+      else counts.others += item.count;
+    });
+    return counts;
+  };
+
   const alertData = getAlertDistributionWithPercentages();
+  const alertCounts = getAlertCountsBySeverity();
   const isLoading = plantsLoading || dashboardLoading;
 
   const handleRefresh = () => {
@@ -237,7 +251,25 @@ const PlantDashboard = () => {
     }
   };
 
-  // Custom tooltip formatter
+  // Custom tooltip formatter for OEE chart
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const oeeTooltipFormatter = (value: any, name?: string) => {
+    return [`${formatNumber(Number(value))}%`, name ? name.charAt(0).toUpperCase() + name.slice(1) : ''];
+  };
+
+  // Custom tooltip formatter for Production chart
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const productionTooltipFormatter = (value: any, name?: string) => {
+    return [formatNumber(Number(value)), name ? name.charAt(0).toUpperCase() + name.slice(1) : ''];
+  };
+
+  // Custom tooltip formatter for Energy chart
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const energyTooltipFormatter = (value: any) => {
+    return [`${formatNumber(Number(value))} kWh`, 'Energy'];
+  };
+
+  // Label formatter for all charts
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tooltipLabelFormatter = (label: any) => {
     if (typeof label === 'number') {
@@ -330,28 +362,68 @@ const PlantDashboard = () => {
         <>
           {/* Row 1: KPI Cards */}
           <div className="kpi-cards-grid">
-            <div className="kpi-card">
-              <div className="kpi-value">{processedData.totalActiveMachines}</div>
-              <div className="kpi-label">Active Machines</div>
+            {/* Active Machines Card */}
+            <div className="kpi-card kpi-card-machines">
+              <div className="kpi-card-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" stroke="#3b82f6"/>
+                </svg>
+              </div>
+              <div className="kpi-card-title">Active Machines</div>
+              <div className="kpi-card-value">{processedData.totalActiveMachines}</div>
+              <div className="kpi-card-subtitle">Across all operations</div>
             </div>
-            <div className="kpi-card">
-              <div className="kpi-value">{processedData.activeAlerts}</div>
-              <div className="kpi-label">Active Alerts</div>
+
+            {/* Active Alerts Card */}
+            <div className="kpi-card kpi-card-alerts">
+              <div className="kpi-card-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                  <line x1="12" y1="9" x2="12" y2="13"/>
+                  <line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+              </div>
+              <div className="kpi-card-title">Active Alerts</div>
+              <div className="kpi-card-value">{processedData.activeAlerts}</div>
+              <div className="kpi-card-subtitle">
+                {alertCounts.critical} critical, {alertCounts.warning} warnings
+              </div>
             </div>
-            <div className="kpi-card">
-              <div className="kpi-value">{formatNumber(processedData.avgEfficiency)}%</div>
-              <div className="kpi-label">Average Efficiency</div>
+
+            {/* Average Efficiency Card */}
+            <div className="kpi-card kpi-card-efficiency">
+              <div className="kpi-card-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                </svg>
+              </div>
+              <div className="kpi-card-title">Average Efficiency</div>
+              <div className="kpi-card-value">{formatNumber(processedData.avgEfficiency)}%</div>
+              <div className="kpi-card-subtitle">Across all operations</div>
             </div>
-            <div className="kpi-card">
-              <div className="kpi-value">{formatNumber(calculateProductionPercentage())}%</div>
-              <div className="kpi-label">Production vs Target</div>
+
+            {/* Production vs Target Card */}
+            <div className="kpi-card kpi-card-production">
+              <div className="kpi-card-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="18" y1="20" x2="18" y2="10"/>
+                  <line x1="12" y1="20" x2="12" y2="4"/>
+                  <line x1="6" y1="20" x2="6" y2="14"/>
+                </svg>
+              </div>
+              <div className="kpi-card-title">Production vs Target</div>
+              <div className="kpi-card-value">{formatNumber(calculateProductionPercentage())}%</div>
+              <div className="kpi-card-subtitle">Current period</div>
             </div>
           </div>
 
           {/* Row 2: OEE Chart + Alert Distribution */}
           <div className="charts-row row-oee-alert">
             <div className="chart-container chart-oee">
-              <h3 className="chart-title">Overall Equipment Effectiveness (OEE)</h3>
+              <h3 className="chart-title">
+                Overall Equipment Effectiveness (OEE)
+                <span className="chart-subtitle">Availability, Performance, Quality metrics</span>
+              </h3>
               {processedData.oeeTrend && processedData.oeeTrend.length > 0 ? (
                 <ResponsiveContainer width="100%" height={380}>
                   <LineChart data={processedData.oeeTrend} margin={{ top: 10, right: 30, left: 20, bottom: 30 }}>
@@ -379,7 +451,7 @@ const PlantDashboard = () => {
                     )}
                     <YAxis tick={{ fontSize: 11 }} stroke="#6b7280" domain={[0, 100]} tickFormatter={(value) => `${value}%`} label={{ value: 'Efficiency (%)', angle: -90, position: 'insideLeft', fontSize: 12, fill: '#6b7280' }} />
                     <Tooltip 
-                      formatter={(value) => [`${formatNumber(Number(value))}%`, '']} 
+                      formatter={oeeTooltipFormatter} 
                       labelFormatter={tooltipLabelFormatter}
                       contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)' }} 
                     />
@@ -395,7 +467,10 @@ const PlantDashboard = () => {
             </div>
 
             <div className="chart-container chart-alert">
-              <h3 className="chart-title">Alert Severity Distribution</h3>
+              <h3 className="chart-title">
+                Alert Severity Distribution
+                <span className="chart-subtitle">Current alert status overview</span>
+              </h3>
               {alertData.length > 0 ? (
                 <div className="alert-donut-container">
                   <ResponsiveContainer width="100%" height={250}>
@@ -442,7 +517,10 @@ const PlantDashboard = () => {
           {/* Row 3: Production & Energy */}
           <div className="charts-row row-production-energy">
             <div className="chart-container chart-production">
-              <h3 className="chart-title">Production vs Target Trend</h3>
+              <h3 className="chart-title">
+                Production vs Target Trend
+                <span className="chart-subtitle">Daily production performance</span>
+              </h3>
               {processedData.productionTrend && processedData.productionTrend.length > 0 ? (
                 <ResponsiveContainer width="100%" height={380}>
                   <BarChart data={processedData.productionTrend} margin={{ top: 10, right: 30, left: 20, bottom: 30 }}>
@@ -470,7 +548,7 @@ const PlantDashboard = () => {
                     )}
                     <YAxis tick={{ fontSize: 11 }} stroke="#6b7280" label={{ value: 'Production Units', angle: -90, position: 'insideLeft', fontSize: 12, fill: '#6b7280' }} />
                     <Tooltip 
-                      formatter={(value) => [formatNumber(Number(value)), '']} 
+                      formatter={productionTooltipFormatter} 
                       labelFormatter={tooltipLabelFormatter}
                       contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)' }} 
                     />
@@ -485,7 +563,10 @@ const PlantDashboard = () => {
             </div>
 
             <div className="chart-container chart-energy">
-              <h3 className="chart-title">Energy Consumption Trend</h3>
+              <h3 className="chart-title">
+                Energy Consumption Trend
+                <span className="chart-subtitle">Total energy usage in kWh</span>
+              </h3>
               {processedData.energyTrend && processedData.energyTrend.length > 0 ? (
                 <ResponsiveContainer width="100%" height={380}>
                   <AreaChart data={processedData.energyTrend} margin={{ top: 10, right: 30, left: 20, bottom: 30 }}>
@@ -519,7 +600,7 @@ const PlantDashboard = () => {
                     )}
                     <YAxis tick={{ fontSize: 11 }} stroke="#6b7280" label={{ value: 'Energy (kWh)', angle: -90, position: 'insideLeft', fontSize: 12, fill: '#6b7280' }} />
                     <Tooltip 
-                      formatter={(value) => [`${formatNumber(Number(value))} kWh`, 'Energy']} 
+                      formatter={energyTooltipFormatter} 
                       labelFormatter={tooltipLabelFormatter}
                       contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)' }} 
                     />

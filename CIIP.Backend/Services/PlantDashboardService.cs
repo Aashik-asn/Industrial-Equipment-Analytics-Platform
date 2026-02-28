@@ -110,7 +110,14 @@ public class PlantDashboardService
             .GroupBy(h => h.MachineId)
             .Select(g => g.OrderByDescending(x => x.RecordedAt).First())
             .ToListAsync();
-
+        var avgLoadPerMachine = await healthQuery
+            .GroupBy(h => h.MachineId)
+            .Select(g => new
+            {
+                MachineId = g.Key,
+                AvgLoad = g.Average(x => (double)x.AvgLoad)
+            })
+            .ToListAsync();
         result.PlantEfficiency =
             latestHealth.Any()
             ? (double)latestHealth.Average(x => x.HealthScore)
@@ -150,7 +157,7 @@ public class PlantDashboardService
                 .Select(g => new EnergyTrendPoint
                 {
                     Time = g.Key,
-                    Energy = (decimal)g.Sum(x => (double)(x.e.EnergyImportKwh ?? 0))
+                    Energy = (decimal)g.Sum(x => (double)(x.e.EnergyImportKwh ?? 0m))
                 })
                 .OrderBy(x => x.Time)
                 .ToListAsync();
@@ -254,9 +261,28 @@ public class PlantDashboardService
         // ======================================================
         // MACHINE OVERVIEW CARDS
         // ======================================================
+        var latestLoadPerMachine = await _db.MachineHealth
+            .AsNoTracking()
+            .Where(h => machineIds.Contains(h.MachineId))
+            .GroupBy(h => h.MachineId)
+            .Select(g => g
+                .OrderByDescending(x => x.RecordedAt)
+                .Select(x => new
+                {
+                    MachineId = x.MachineId,
+                    CurrentLoad = x.AvgLoad
+                })
+                .First())
+            .ToListAsync();
         result.Machines = machines.Select(m =>
         {
             var health = latestHealth
+                .FirstOrDefault(x => x.MachineId == m.MachineId);
+
+            var avgLoad = avgLoadPerMachine
+                .FirstOrDefault(x => x.MachineId == m.MachineId);
+
+            var currentLoad = latestLoadPerMachine
                 .FirstOrDefault(x => x.MachineId == m.MachineId);
 
             return new MachineOverviewCard
@@ -266,8 +292,12 @@ public class PlantDashboardService
                 MachineName = m.MachineName,
                 MachineType = m.MachineType,
                 Status = m.Status,
+
                 HealthScore = (double)(health?.HealthScore ?? 0),
-                RuntimeHours = (double)(health?.RuntimeHours ?? 0)
+                RuntimeHours = (double)(health?.RuntimeHours ?? 0),
+
+                AvgLoad = (double)(avgLoad?.AvgLoad ?? 0),
+                CurrentLoad = (double)(currentLoad?.CurrentLoad ?? 0)
             };
         }).ToList();
 

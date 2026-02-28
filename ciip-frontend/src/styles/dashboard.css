@@ -218,6 +218,7 @@
   padding: 24px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+  border-left: 4px solid transparent;
 }
 
 .kpi-card:hover {
@@ -225,17 +226,78 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-.kpi-value {
-  font-size: 32px;
-  font-weight: 700;
-  color: #1f2937;
-  margin-bottom: 8px;
-  line-height: 1;
+/* KPI Card with Icon Layout */
+.kpi-card-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
 }
 
-.kpi-label {
-  font-size: 14px;
+.kpi-card-icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.kpi-card-machines {
+  border-left-color: #3b82f6;
+}
+
+.kpi-card-machines .kpi-card-icon {
+  background-color: #eff6ff;
+  color: #3b82f6;
+}
+
+.kpi-card-alerts {
+  border-left-color: #ef4444;
+}
+
+.kpi-card-alerts .kpi-card-icon {
+  background-color: #fef2f2;
+  color: #ef4444;
+}
+
+.kpi-card-efficiency {
+  border-left-color: #22c55e;
+}
+
+.kpi-card-efficiency .kpi-card-icon {
+  background-color: #f0fdf4;
+  color: #22c55e;
+}
+
+.kpi-card-production {
+  border-left-color: #f97316;
+}
+
+.kpi-card-production .kpi-card-icon {
+  background-color: #fff7ed;
+  color: #f97316;
+}
+
+.kpi-card-title {
+  font-size: 12px;
+  font-weight: 600;
   color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.kpi-card-value {
+  font-size: 36px;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 4px;
+  line-height: 1.2;
+}
+
+.kpi-card-subtitle {
+  font-size: 13px;
+  color: #9ca3af;
   font-weight: 500;
 }
 
@@ -387,6 +449,17 @@
   margin: 0 0 20px 0;
   padding-bottom: 12px;
   border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.chart-subtitle {
+  font-size: 12px;
+  font-weight: 400;
+  color: #9ca3af;
+  text-transform: none;
+  letter-spacing: normal;
 }
 
 /* Empty State */
@@ -498,7 +571,7 @@
     max-width: 280px;
   }
 
-  .kpi-value {
+  .kpi-card-value {
     font-size: 28px;
   }
 
@@ -526,7 +599,7 @@
 /* Axis Label Styling */
 .recharts-label {
   font-size: 12px !important;
-  fill: '#6b7280' !important;
+  fill: #6b7280 !important;
 }
 
 /* Alert Donut Chart Styles */
@@ -534,8 +607,13 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   height: 100%;
+  padding-top: 10px;
+}
+
+.alert-donut-container .recharts-responsive-container {
+  min-height: 200px;
 }
 
 .alert-legend {
@@ -595,4 +673,3 @@
 .recharts-line {
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
 }
-
