@@ -13,45 +13,26 @@ public class AlertQuery
     // ======================================================
 
     [Authorize]
-    public Task<List<AlertDto>> Alerts(
-        [Service] AlertService service,
-        ClaimsPrincipal user,
-        Guid? plantId,
-        string? severity,
-        string? status,
-        DateTime? fromDate,
-        DateTime? toDate)
+    public Task<AlertDashboardDto> AlertDashboard(
+    [Service] AlertService service,
+    ClaimsPrincipal user,
+    Guid? plantId,
+    string? severity,
+    string? status,
+    DateTime? fromDate,
+    DateTime? toDate)
     {
         var tenantId = Guid.Parse(
             user.FindFirst("tenantId")!.Value
         );
 
-        return service.GetAlerts(
+        return service.GetAlertDashboard(
             tenantId,
             plantId,
             severity,
             status,
             fromDate,
             toDate);
-    }
-
-    // ======================================================
-    // ALERT SUMMARY
-    // ======================================================
-
-    [Authorize]
-    public Task<AlertSummaryDto> AlertSummary(
-        [Service] AlertService service,
-        ClaimsPrincipal user)
-    {
-        Console.WriteLine("######## ALERT SUMMARY EXECUTED ########");
-        Console.WriteLine("JWT TenantId = " + user.FindFirst("tenantId")?.Value);
-
-        var tenantId = Guid.Parse(
-            user.FindFirst("tenantId")!.Value
-        );
-
-        return service.GetSummary(tenantId);
     }
     [Authorize]
     public async Task<AcknowledgedAlertDto?> AcknowledgedAlert(

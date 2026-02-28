@@ -2,6 +2,7 @@
 using CIIP.Backend.DTOs;
 using CIIP.Backend.Entities;
 using Microsoft.EntityFrameworkCore;
+using System.Numerics;
 
 namespace CIIP.Backend.Services;
 
@@ -17,23 +18,42 @@ public class AlertService
     // ======================================================
     // GET ALERT LIST
     // ======================================================
-    public async Task<List<AlertDto>> GetAlerts(
-        Guid tenantId,
-        Guid? plantId,
-        string? severity,
-        string? status,
-        DateTime? from,
-        DateTime? to)
+    public async Task<AlertDashboardDto> GetAlertDashboard(
+    Guid tenantId,
+    Guid? plantId,
+    string? severity,
+    string? status,
+    DateTime? from,
+    DateTime? to)
     {
+        DateTime? fromLocal = from.HasValue
+            ? DateTime.SpecifyKind(from.Value, DateTimeKind.Unspecified)
+            : null;
+
+        DateTime? toLocal = to.HasValue
+            ? DateTime.SpecifyKind(to.Value.Date.AddDays(1),
+                DateTimeKind.Unspecified)   // inclusive
+            : null;
+
         var query =
             from alert in _db.AlertEvents
-            join machine in _db.Machines on alert.MachineId equals machine.MachineId
-            join plant in _db.Plants on machine.PlantId equals plant.PlantId
+            join machine in _db.Machines
+                on alert.MachineId equals machine.MachineId
+            join plant in _db.Plants
+                on machine.PlantId equals plant.PlantId
             join ack in _db.AlertAcknowledgements
                 on alert.AlertId equals ack.AlertId into ackJoin
             from ack in ackJoin.DefaultIfEmpty()
             where plant.TenantId == tenantId
-            select new { alert, machine, plant, ack };
+            select new
+            {
+                alert,
+                machine,
+                plant,
+                IsAcknowledged = ack != null
+            };
+
+        // ---------------- FILTERS ----------------
 
         if (plantId.HasValue)
             query = query.Where(x => x.plant.PlantId == plantId);
@@ -41,67 +61,66 @@ public class AlertService
         if (!string.IsNullOrEmpty(severity))
             query = query.Where(x => x.alert.Severity == severity);
 
-        if (from.HasValue)
-            query = query.Where(x => x.alert.GeneratedAt >= from);
+        if (fromLocal.HasValue)
+            query = query.Where(x =>
+                x.alert.GeneratedAt >= fromLocal.Value);
 
-        if (to.HasValue)
-            query = query.Where(x => x.alert.GeneratedAt <= to);
+        if (toLocal.HasValue)
+            query = query.Where(x =>
+                x.alert.GeneratedAt < toLocal.Value);
 
+        if (!string.IsNullOrEmpty(status))
+        {
+            if (status == "ACKNOWLEDGED")
+                query = query.Where(x => x.IsAcknowledged);
+
+            if (status == "PENDING")
+                query = query.Where(x => !x.IsAcknowledged);
+        }
+
+        // Execute once
         var data = await query
             .OrderByDescending(x => x.alert.GeneratedAt)
             .ToListAsync();
 
-        var result = data.Select(x =>
+        // ---------------- SUMMARY ----------------
+
+        var critical = data.Count(x =>
+            x.alert.Severity == "CRITICAL" &&
+            !x.IsAcknowledged);
+
+        var warning = data.Count(x =>
+            x.alert.Severity == "WARNING" &&
+            !x.IsAcknowledged);
+
+        var acknowledged = data.Count(x =>
+            x.IsAcknowledged);
+
+        // ---------------- ALERT LIST ----------------
+
+        var alerts = data.Select(x => new AlertItemDto
         {
-            var alertStatus = x.ack != null ? "ACKNOWLEDGED" : "PENDING";
+            AlertId = x.alert.AlertId,
+            Severity = x.alert.Severity,
+            Parameter = x.alert.Parameter,
+            ActualValue = x.alert.ActualValue ?? 0,
 
-            return new AlertDto
-            {
-                AlertId = x.alert.AlertId,
-                Severity = x.alert.Severity,
-                Parameter = x.alert.Parameter,
-                ActualValue = x.alert.ActualValue??0,
+            PlantName = x.plant.PlantName,
+            MachineCode = x.machine.MachineCode,
+            MachineName = x.machine.MachineName,
 
-                PlantName = x.plant.PlantName,
-                MachineCode = x.machine.MachineCode,
-                MachineName = x.machine.MachineName,
-
-                GeneratedAt = x.alert.GeneratedAt,
-                Status = alertStatus
-            };
+            GeneratedAt = x.alert.GeneratedAt,
+            Status = x.IsAcknowledged
+                ? "ACKNOWLEDGED"
+                : "PENDING"
         }).ToList();
 
-        if (!string.IsNullOrEmpty(status))
-            result = result.Where(x => x.Status == status).ToList();
-
-        return result;
-    }
-
-    // ======================================================
-    // SUMMARY COUNTS (TOP CARDS)
-    // ======================================================
-    public async Task<AlertSummaryDto> GetSummary(Guid tenantId)
-    {
-        var baseQuery =
-            from alert in _db.AlertEvents
-            join machine in _db.Machines on alert.MachineId equals machine.MachineId
-            join plant in _db.Plants on machine.PlantId equals plant.PlantId
-            where plant.TenantId == tenantId
-            select alert;
-
-        var critical = await baseQuery.CountAsync(x => x.Severity == "CRITICAL");
-        var warning = await baseQuery.CountAsync(x => x.Severity == "WARNING");
-
-        var acknowledged =
-            await (from ack in _db.AlertAcknowledgements
-                   join alert in baseQuery on ack.AlertId equals alert.AlertId
-                   select ack).CountAsync();
-
-        return new AlertSummaryDto
+        return new AlertDashboardDto
         {
             Critical = critical,
             Warning = warning,
-            Acknowledged = acknowledged
+            Acknowledged = acknowledged,
+            Alerts = alerts
         };
     }
     public async Task<AcknowledgedAlertDto?> GetAcknowledgedAlert(

@@ -1,6 +1,17 @@
 ﻿namespace CIIP.Backend.DTOs;
 
-public class AlertDto
+public class AlertDashboardDto
+{
+    // ===== SUMMARY =====
+    public int Critical { get; set; }
+    public int Warning { get; set; }
+    public int Acknowledged { get; set; }
+
+    // ===== ALERT LIST =====
+    public List<AlertItemDto> Alerts { get; set; } = new();
+}
+
+public class AlertItemDto
 {
     public Guid AlertId { get; set; }
 
