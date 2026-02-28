@@ -3,6 +3,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import PlantDashboard from './pages/PlantDashboard';
+import MachineDetails from './pages/MachineDetails';
 import AlertManagement from './pages/AlertManagement';
 import Profile from './pages/Profile';
 import Layout from './components/Layout';
@@ -44,6 +45,7 @@ function App() {
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="plant-dashboard/:plantId" element={<PlantDashboard />} />
+          <Route path="machine-details/:machineId" element={<MachineDetails />} />
           <Route path="alerts" element={<AlertManagement />} />
           <Route path="profile" element={<Profile />} />
         </Route>
@@ -53,4 +55,3 @@ function App() {
 }
 
 export default App;
-

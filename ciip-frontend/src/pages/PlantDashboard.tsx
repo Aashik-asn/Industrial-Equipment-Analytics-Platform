@@ -2,40 +2,25 @@ import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@apollo/client';
 import {
-  LineChart,
-  Line,
+
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   Legend,
   ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
   BarChart,
   Bar,
   AreaChart,
   Area,
 } from 'recharts';
 import dayjs from 'dayjs';
-import { PLANTS_QUERY, DASHBOARD_QUERY } from '../graphql/queries';
-import '../styles/dashboard.css';
+import { PLANT_DASHBOARD_QUERY } from '../graphql/queries';
+import '../styles/plantDashboard.css';
 
-interface Plant {
-  plantId: string;
-  plantName: string;
-}
-
-interface AlertDistribution {
-  count: number;
-  severity: string;
-}
-
-interface OeeTrendPoint {
-  availability: number;
-  performance: number;
-  quality: number;
+// TypeScript interfaces matching GraphQL response
+interface EnergyTrendPoint {
+  energy: number;
   time: string;
 }
 
@@ -45,21 +30,37 @@ interface ProductionTrendPoint {
   time: string;
 }
 
-interface EnergyTrendPoint {
-  energy: number;
-  time: string;
+interface UptimeDowntimePoint {
+  label: string;
+  uptime: number;
+  downtime: number;
 }
 
-interface DashboardData {
-  activeAlerts: number;
-  avgEfficiency: number;
-  totalActiveMachines: number;
-  alertDistribution: AlertDistribution[];
-  oeeTrend: OeeTrendPoint[];
-  productionTrend: ProductionTrendPoint[];
+interface Machine {
+  healthScore: number;
+  machineCode: string;
+  machineId: string;
+  machineName: string;
+  machineType: string;
+  runtimeHours: number;
+  status: string;
+  avgLoad: number;
+  currentLoad: number;
+}
+
+interface PlantDashboardData {
+  activeMachines: number;
+  avgRuntime: number;
+  plantEfficiency: number;
+  totalEnergy: number;
+  totalMachines: number;
   energyTrend: EnergyTrendPoint[];
+  productionTrend: ProductionTrendPoint[];
+  uptimeDowntime: UptimeDowntimePoint[];
+  machines: Machine[];
 }
 
+// Helper functions
 const formatNumber = (value: number): string => {
   return Number(value).toFixed(2);
 };
@@ -69,7 +70,7 @@ const formatDateFull = (dateString: string): string => {
 };
 
 const formatDateOnly = (dateString: string): string => {
-  return dayjs(dateString).format('YYYY-MM-dd');
+  return dayjs(dateString).format('yyyy-MM-dd');
 };
 
 const formatTimeOnly = (dateString: string): string => {
@@ -81,8 +82,6 @@ const differenceInDays = (from: string, to: string): number => {
   const end = dayjs(to);
   return end.diff(start, 'day');
 };
-
-const COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6'];
 
 // Generate 4-hour interval ticks for the given date range
 const generateFourHourTicks = (fromDate: string, toDate: string): number[] => {
@@ -103,20 +102,43 @@ const formatTick = (value: number): string => {
   return dayjs(value).format('HH:mm');
 };
 
+// Get status color based on machine status
+const getStatusColor = (status: string | null | undefined): string => {
+  if (!status) return '#9ca3af';
+  const statusLower = status.toLowerCase();
+  if (statusLower === 'running') return '#22c55e';
+  if (statusLower === 'warning') return '#eab308';
+  if (statusLower === 'critical') return '#ef4444';
+  return '#9ca3af';
+};
+
+const getStatusDisplay = (status: string | null | undefined): string => {
+  if (!status) return 'Unknown';
+  const statusUpper = status.toUpperCase();
+  if (statusUpper === 'RUNNING' || statusUpper === 'IDLE') return statusUpper;
+  return statusUpper;
+};
+
+// Get health score color
+const getHealthScoreColor = (score: number): string => {
+  if (score >= 80) return '#22c55e';
+  if (score >= 50) return '#eab308';
+  return '#ef4444';
+};
+
 const PlantDashboard = () => {
   const params = useParams();
-  const urlPlantId = params.plantId;
+  const plantId = params.plantId;
   const navigate = useNavigate();
   
-  const [selectedPlant, setSelectedPlant] = useState<string | null>(urlPlantId || null);
   const [dateFrom, setDateFrom] = useState<string>('');
   const [dateTo, setDateTo] = useState<string>('');
-
-  const { data: plantsData, loading: plantsLoading, error: plantsError } = useQuery(PLANTS_QUERY);
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
   const getDashboardVariables = () => {
-    const variables: Record<string, unknown> = {};
-    if (selectedPlant) variables.plantId = selectedPlant;
+    const variables: Record<string, unknown> = {
+      plantId: plantId,
+    };
     if (dateFrom) {
       const fromDate = new Date(dateFrom);
       if (!isNaN(fromDate.getTime())) {
@@ -137,27 +159,19 @@ const PlantDashboard = () => {
     loading: dashboardLoading,
     error: dashboardError,
     refetch: refetchDashboard,
-  } = useQuery(DASHBOARD_QUERY, {
+  } = useQuery(PLANT_DASHBOARD_QUERY, {
     variables: getDashboardVariables(),
-    skip: false,
+    skip: !plantId,
   });
-
-  // Update selected plant when URL changes
-  useEffect(() => {
-    if (urlPlantId && urlPlantId !== selectedPlant) {
-      setSelectedPlant(urlPlantId);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [urlPlantId]);
 
   // Refetch dashboard when filters change
   useEffect(() => {
-    refetchDashboard(getDashboardVariables());
-  }, [selectedPlant, dateFrom, dateTo, refetchDashboard]);
+    if (plantId) {
+      refetchDashboard(getDashboardVariables());
+    }
+  }, [dateFrom, dateTo, refetchDashboard, plantId]);
 
-  const plants: Plant[] = plantsData?.plants || [];
-  const currentPlant = plants.find((p) => p.plantId === selectedPlant);
-  const dashboard: DashboardData | null = dashboardData?.dashboard || null;
+  const dashboard: PlantDashboardData | null = dashboardData?.plantDashboard || null;
 
   // Determine if multi-day view
   const isMultiDay = useMemo(() => {
@@ -173,22 +187,15 @@ const PlantDashboard = () => {
 
   // Get data min/max for time domain
   const timeDomain = useMemo(() => {
-    if (!dashboard?.oeeTrend || dashboard.oeeTrend.length === 0) return undefined;
-    const times = dashboard.oeeTrend.map(p => dayjs(p.time).valueOf());
+    if (!dashboard?.productionTrend || dashboard.productionTrend.length === 0) return undefined;
+    const times = dashboard.productionTrend.map(p => dayjs(p.time).valueOf());
     return [Math.min(...times), Math.max(...times)];
-  }, [dashboard?.oeeTrend]);
+  }, [dashboard?.productionTrend]);
 
-  // Process data
+  // Process chart data
   const processedData = useMemo(() => {
     if (!dashboard) return null;
     return {
-      ...dashboard,
-      oeeTrend: dashboard.oeeTrend?.map((point) => ({
-        ...point,
-        timeFormatted: formatDateFull(point.time),
-        timeTick: isMultiDay ? formatDateOnly(point.time) : formatTimeOnly(point.time),
-        timeNumeric: dayjs(point.time).valueOf(),
-      })) || [],
       productionTrend: dashboard.productionTrend?.map((point) => ({
         ...point,
         timeFormatted: formatDateFull(point.time),
@@ -201,60 +208,29 @@ const PlantDashboard = () => {
         timeTick: isMultiDay ? formatDateOnly(point.time) : formatTimeOnly(point.time),
         timeNumeric: dayjs(point.time).valueOf(),
       })) || [],
+      uptimeDowntime: dashboard.uptimeDowntime?.map((point) => ({
+        ...point,
+        uptimePercent: point.uptime,
+        downtimePercent: point.downtime,
+      })) || [],
     };
   }, [dashboard, isMultiDay]);
 
-  const calculateProductionPercentage = (): number => {
-    if (!dashboard?.productionTrend || dashboard.productionTrend.length === 0) return 0;
-    const latest = dashboard.productionTrend[dashboard.productionTrend.length - 1];
-    if (!latest || latest.target === 0) return 0;
-    return Number((latest.actual / latest.target) * 100);
-  };
-
-  const getAlertDistributionWithPercentages = () => {
-    if (!dashboard?.alertDistribution || dashboard.alertDistribution.length === 0) return [];
-    const total = dashboard.alertDistribution.reduce((sum, item) => sum + item.count, 0);
-    return dashboard.alertDistribution.map((item, index) => ({
-      ...item,
-      percentage: total > 0 ? Number(((item.count / total) * 100).toFixed(2)) : 0,
-      color: COLORS[index % COLORS.length],
-    }));
-  };
-
-  // Get alert counts by severity
-  const getAlertCountsBySeverity = () => {
-    const counts = { critical: 0, warning: 0, others: 0 };
-    if (!dashboard?.alertDistribution) return counts;
-    dashboard.alertDistribution.forEach(item => {
-      const severity = item.severity?.toLowerCase() || '';
-      if (severity.includes('critical')) counts.critical += item.count;
-      else if (severity.includes('warning')) counts.warning += item.count;
-      else counts.others += item.count;
-    });
-    return counts;
-  };
-
-  const alertData = getAlertDistributionWithPercentages();
-  const alertCounts = getAlertCountsBySeverity();
-  const isLoading = plantsLoading || dashboardLoading;
+  // Filter machines based on search query
+  const filteredMachines = useMemo(() => {
+    if (!dashboard?.machines) return [];
+    if (!searchQuery.trim()) return dashboard.machines;
+    
+    const query = searchQuery.toLowerCase();
+    return dashboard.machines.filter(machine => 
+      machine.machineName.toLowerCase().includes(query) ||
+      machine.machineCode.toLowerCase().includes(query) ||
+      machine.machineType.toLowerCase().includes(query)
+    );
+  }, [dashboard?.machines, searchQuery]);
 
   const handleRefresh = () => {
     refetchDashboard(getDashboardVariables());
-  };
-
-  const handlePlantChange = (plantId: string) => {
-    setSelectedPlant(plantId === '' ? null : plantId);
-    if (plantId) {
-      navigate(`/plant-dashboard/${plantId}`);
-    } else {
-      navigate('/dashboard');
-    }
-  };
-
-  // Custom tooltip formatter for OEE chart
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const oeeTooltipFormatter = (value: any, name?: string) => {
-    return [`${formatNumber(Number(value))}%`, name ? name.charAt(0).toUpperCase() + name.slice(1) : ''];
   };
 
   // Custom tooltip formatter for Production chart
@@ -269,6 +245,12 @@ const PlantDashboard = () => {
     return [`${formatNumber(Number(value))} kWh`, 'Energy'];
   };
 
+  // Custom tooltip formatter for Uptime/Downtime chart
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const uptimeTooltipFormatter = (value: any, name?: string) => {
+    return [`${formatNumber(Number(value))}%`, name ? name.charAt(0).toUpperCase() + name.slice(1) : ''];
+  };
+
   // Label formatter for all charts
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tooltipLabelFormatter = (label: any) => {
@@ -278,87 +260,81 @@ const PlantDashboard = () => {
     return String(label);
   };
 
-  if (plantsLoading) {
+  if (!plantId) {
     return (
-      <div className="dashboard-container">
-        <div className="loading-container">
-          <div className="loading-spinner"></div>
-          <p>Loading plant data...</p>
+      <div className="plant-dashboard-container">
+        <div className="error-container">
+          <h3>Missing Plant ID</h3>
+          <p>Please select a plant from the dashboard.</p>
         </div>
       </div>
     );
   }
 
-  if (plantsError) {
+  if (dashboardLoading && !dashboardData) {
     return (
-      <div className="dashboard-container">
+      <div className="plant-dashboard-container">
+        <div className="loading-container">
+          <div className="loading-spinner"></div>
+          <p>Loading plant dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (dashboardError) {
+    return (
+      <div className="plant-dashboard-container">
         <div className="error-container">
-          <h3>Error Loading Plant Data</h3>
-          <p>{plantsError.message}</p>
+          <h3>Error Loading Dashboard</h3>
+          <p>{dashboardError.message}</p>
+          <button className="retry-button" onClick={handleRefresh}>Retry</button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="dashboard-container">
+    <div className="plant-dashboard-container">
+      {/* Header Section */}
       <div className="dashboard-header">
         <div className="dashboard-title-section">
-          <h1 className="dashboard-title">
-            {currentPlant ? currentPlant.plantName : 'Plant Dashboard'}
-          </h1>
-          <p className="dashboard-subtitle">
-            {currentPlant 
-              ? `Detailed view of ${currentPlant.plantName} operations` 
-              : 'Monitor and manage your industrial plant operations.'}
-          </p>
+          <h1 className="dashboard-title">Plant Dashboard</h1>
+          <p className="dashboard-subtitle">Real-time machine monitoring and plant operations</p>
         </div>
         <div className="dashboard-filters">
           <div className="filter-group">
-            <label htmlFor="plant-filter" className="filter-label">Plant</label>
-            <select
-              id="plant-filter"
-              className="filter-select"
-              value={selectedPlant || ''}
-              onChange={(e) => handlePlantChange(e.target.value)}
-              disabled={plantsLoading}
-            >
-              <option value="">Select Plant...</option>
-              {plants.map((plant) => (
-                <option key={plant.plantId} value={plant.plantId}>{plant.plantName}</option>
-              ))}
-            </select>
-          </div>
-          <div className="filter-group">
             <label className="filter-label">Date Range</label>
             <div className="date-range-inputs">
-              <input type="date" className="filter-date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+              <input 
+                type="date" 
+                className="filter-date" 
+                value={dateFrom} 
+                onChange={(e) => setDateFrom(e.target.value)} 
+              />
               <span className="date-separator">to</span>
-              <input type="date" className="filter-date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+              <input 
+                type="date" 
+                className="filter-date" 
+                value={dateTo} 
+                onChange={(e) => setDateTo(e.target.value)} 
+              />
             </div>
           </div>
-          <button className="refresh-button" onClick={handleRefresh} disabled={isLoading}>
-            {isLoading ? 'Loading...' : 'Refresh'}
+          <button className="refresh-button" onClick={handleRefresh} disabled={dashboardLoading}>
+            {dashboardLoading ? 'Loading...' : 'Refresh'}
           </button>
         </div>
       </div>
 
-      {dashboardError && (
-        <div className="error-container">
-          <h3>Error Loading Dashboard Data</h3>
-          <p>{dashboardError.message}</p>
-          <button className="retry-button" onClick={handleRefresh}>Retry</button>
-        </div>
-      )}
-
-      {isLoading && (
+      {dashboardLoading && (
         <div className="loading-container">
           <div className="loading-spinner"></div>
           <p>Loading dashboard data...</p>
         </div>
       )}
 
-      {!isLoading && processedData && (
+      {!dashboardLoading && dashboard && processedData && (
         <>
           {/* Row 1: KPI Cards */}
           <div className="kpi-cards-grid">
@@ -370,152 +346,150 @@ const PlantDashboard = () => {
                 </svg>
               </div>
               <div className="kpi-card-title">Active Machines</div>
-              <div className="kpi-card-value">{processedData.totalActiveMachines}</div>
-              <div className="kpi-card-subtitle">Across all operations</div>
+              <div className="kpi-card-value">
+                {dashboard.activeMachines} / {dashboard.totalMachines}
+              </div>
+              <div className="kpi-card-subtitle">Machines running</div>
             </div>
 
-            {/* Active Alerts Card */}
-            <div className="kpi-card kpi-card-alerts">
-              <div className="kpi-card-icon">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-                  <line x1="12" y1="9" x2="12" y2="13"/>
-                  <line x1="12" y1="17" x2="12.01" y2="17"/>
-                </svg>
-              </div>
-              <div className="kpi-card-title">Active Alerts</div>
-              <div className="kpi-card-value">{processedData.activeAlerts}</div>
-              <div className="kpi-card-subtitle">
-                {alertCounts.critical} critical, {alertCounts.warning} warnings
-              </div>
-            </div>
-
-            {/* Average Efficiency Card */}
+            {/* Plant Efficiency Card */}
             <div className="kpi-card kpi-card-efficiency">
               <div className="kpi-card-icon">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
                 </svg>
               </div>
-              <div className="kpi-card-title">Average Efficiency</div>
-              <div className="kpi-card-value">{formatNumber(processedData.avgEfficiency)}%</div>
-              <div className="kpi-card-subtitle">Across all operations</div>
+              <div className="kpi-card-title">Plant Efficiency</div>
+              <div className="kpi-card-value">{formatNumber(dashboard.plantEfficiency)}%</div>
+              <div className="kpi-card-subtitle">Overall efficiency</div>
             </div>
 
-            {/* Production vs Target Card */}
-            <div className="kpi-card kpi-card-production">
+            {/* Total Energy Card */}
+            <div className="kpi-card kpi-card-energy">
               <div className="kpi-card-icon">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <line x1="18" y1="20" x2="18" y2="10"/>
-                  <line x1="12" y1="20" x2="12" y2="4"/>
-                  <line x1="6" y1="20" x2="6" y2="14"/>
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
                 </svg>
               </div>
-              <div className="kpi-card-title">Production vs Target</div>
-              <div className="kpi-card-value">{formatNumber(calculateProductionPercentage())}%</div>
-              <div className="kpi-card-subtitle">Current period</div>
+              <div className="kpi-card-title">Total Energy</div>
+              <div className="kpi-card-value">{formatNumber(dashboard.totalEnergy)}</div>
+              <div className="kpi-card-subtitle">kWh consumed</div>
+            </div>
+
+            {/* Average Runtime Card */}
+            <div className="kpi-card kpi-card-runtime">
+              <div className="kpi-card-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10"/>
+                  <polyline points="12 6 12 12 16 14"/>
+                </svg>
+              </div>
+              <div className="kpi-card-title">Avg Runtime</div>
+              <div className="kpi-card-value">{formatNumber(dashboard.avgRuntime)}</div>
+              <div className="kpi-card-subtitle">Hours</div>
             </div>
           </div>
 
-          {/* Row 2: OEE Chart + Alert Distribution */}
-          <div className="charts-row row-oee-alert">
-            <div className="chart-container chart-oee">
-              <h3 className="chart-title">
-                Overall Equipment Effectiveness (OEE)
-                <span className="chart-subtitle">Availability, Performance, Quality metrics</span>
-              </h3>
-              {processedData.oeeTrend && processedData.oeeTrend.length > 0 ? (
-                <ResponsiveContainer width="100%" height={380}>
-                  <LineChart data={processedData.oeeTrend} margin={{ top: 10, right: 30, left: 20, bottom: 30 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                    {isMultiDay ? (
-                      <XAxis 
-                        dataKey="timeTick" 
-                        tick={{ fontSize: 11 }} 
-                        stroke="#6b7280" 
-                        interval={0}
-                        label={{ value: 'Date', position: 'insideBottom', offset: -10, fontSize: 12, fill: '#6b7280' }} 
-                      />
-                    ) : (
-                      <XAxis 
-                        type="number"
-                        scale="time"
-                        dataKey="timeNumeric"
-                        domain={timeDomain}
-                        ticks={fourHourTicks}
-                        tickFormatter={formatTick}
-                        tick={{ fontSize: 11 }} 
-                        stroke="#6b7280"
-                        label={{ value: 'Time', position: 'insideBottom', offset: -10, fontSize: 12, fill: '#6b7280' }}
-                      />
-                    )}
-                    <YAxis tick={{ fontSize: 11 }} stroke="#6b7280" domain={[0, 100]} tickFormatter={(value) => `${value}%`} label={{ value: 'Efficiency (%)', angle: -90, position: 'insideLeft', fontSize: 12, fill: '#6b7280' }} />
-                    <Tooltip 
-                      formatter={oeeTooltipFormatter} 
-                      labelFormatter={tooltipLabelFormatter}
-                      contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)' }} 
-                    />
-                    <Legend wrapperStyle={{ paddingTop: '10px' }} />
-                    <Line type="monotone" dataKey="availability" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 6 }} name="Availability" />
-                    <Line type="monotone" dataKey="performance" stroke="#22c55e" strokeWidth={3} dot={{ r: 4, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 6 }} name="Performance" />
-                    <Line type="monotone" dataKey="quality" stroke="#f97316" strokeWidth={3} dot={{ r: 4, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 6 }} name="Quality" />
-                  </LineChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="empty-state">No OEE trend data available</div>
-              )}
+          {/* Machine Status Overview Section */}
+          <div className="machine-status-section">
+            <div className="machine-status-header">
+              <h2 className="machine-status-title">Machine Status Overview</h2>
+              <div className="machine-search-container">
+                <input
+                  type="text"
+                  className="machine-search-input"
+                  placeholder="Search by machine name, code, or type..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                <svg className="machine-search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="11" cy="11" r="8"/>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
+              </div>
             </div>
 
-            <div className="chart-container chart-alert">
-              <h3 className="chart-title">
-                Alert Severity Distribution
-                <span className="chart-subtitle">Current alert status overview</span>
-              </h3>
-              {alertData.length > 0 ? (
-                <div className="alert-donut-container">
-                  <ResponsiveContainer width="100%" height={250}>
-                    <PieChart>
-                      <Pie 
-                        data={alertData} 
-                        cx="50%" 
-                        cy="50%" 
-                        innerRadius={60} 
-                        outerRadius={90} 
-                        paddingAngle={2} 
-                        dataKey="count"
-                      >
-                        {alertData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} stroke="#fff" strokeWidth={2} />
-                        ))}
-                      </Pie>
-                      <Tooltip 
-                        formatter={(value, _name, props) => {
-                          const item = alertData[(props as { payload?: { index?: number } })?.payload?.index || 0];
-                          return [`${value} alerts (${item?.percentage || 0}%)`, item?.severity || ''];
-                        }} 
-                        contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)' }} 
+            {/* Machine Cards Grid */}
+            <div className="machine-cards-grid">
+              {filteredMachines.map((machine) => (
+                <div 
+                  key={machine.machineId} 
+                  className="machine-card"
+                  onClick={() => navigate(`/machine-details/${machine.machineId}`)}
+                >
+                  <div className="machine-card-header">
+                    <div>
+                      <span className="machine-code">{machine.machineCode}</span>
+                      <span className="machine-type">{machine.machineType}</span>
+                    </div>
+                    <span 
+                      className="machine-status-indicator"
+                      style={{ backgroundColor: getStatusColor(machine.status) }}
+                      title={getStatusDisplay(machine.status)}
+                    />
+                  </div>
+                  <h3 className="machine-name">{machine.machineName}</h3>
+                  
+                  {/* Health Score Progress Bar */}
+                  <div className="machine-health-section">
+                    <div className="machine-health-header">
+                      <span className="machine-health-label">Health Score</span>
+                      <span className="machine-health-value" style={{ color: getHealthScoreColor(machine.healthScore) }}>
+                        {formatNumber(machine.healthScore)}%
+                      </span>
+                    </div>
+                    <div className="machine-health-progress">
+                      <div 
+                        className="machine-health-progress-bar"
+                        style={{ 
+                          width: `${machine.healthScore}%`,
+                          backgroundColor: getHealthScoreColor(machine.healthScore)
+                        }}
                       />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div className="alert-legend">
-                    {alertData.map((item, index) => (
-                      <div key={index} className="alert-legend-item">
-                        <span className="alert-legend-color" style={{ backgroundColor: item.color }}></span>
-                        <span className="alert-legend-severity">{item.severity}</span>
-                        <span className="alert-legend-count">{item.count}</span>
-                        <span className="alert-legend-percentage">({item.percentage}%)</span>
+                    </div>
+                  </div>
+
+                  <div className="machine-details">
+                    <div className="machine-detail-row">
+                      <span className="detail-label">Status</span>
+                      <span className="detail-value" style={{ color: getStatusColor(machine.status), fontWeight: 600 }}>
+                        {getStatusDisplay(machine.status)}
+                      </span>
+                    </div>
+                    <div className="machine-detail-row">
+                      <span className="detail-label">Current Load</span>
+                      <div className="detail-progress">
+                        <span className="detail-value">{formatNumber(machine.currentLoad)}%</span>
+                        <div className="detail-progress-bar">
+                          <div 
+                            className="detail-progress-fill"
+                            style={{ width: `${Math.min(machine.currentLoad, 100)}%` }}
+                          />
+                        </div>
                       </div>
-                    ))}
+                    </div>
+                    <div className="machine-detail-row">
+                      <span className="detail-label">Avg Load</span>
+                      <span className="detail-value">{formatNumber(machine.avgLoad)}%</span>
+                    </div>
+                    <div className="machine-detail-row">
+                      <span className="detail-label">Runtime</span>
+                      <span className="detail-value">{formatNumber(machine.runtimeHours)} h</span>
+                    </div>
                   </div>
                 </div>
-              ) : (
-                <div className="empty-state">No alert distribution data available</div>
-              )}
+              ))}
             </div>
+
+            {filteredMachines.length === 0 && (
+              <div className="empty-state">No machines found matching your search</div>
+            )}
           </div>
 
-          {/* Row 3: Production & Energy */}
+          {/* Charts Section */}
+          {/* Row 1: Production vs Target + Energy */}
           <div className="charts-row row-production-energy">
+            {/* Production vs Target Chart - Bar Chart */}
             <div className="chart-container chart-production">
               <h3 className="chart-title">
                 Production vs Target Trend
@@ -562,6 +536,7 @@ const PlantDashboard = () => {
               )}
             </div>
 
+            {/* Energy Trend Chart - Area Chart with gradient */}
             <div className="chart-container chart-energy">
               <h3 className="chart-title">
                 Energy Consumption Trend
@@ -571,7 +546,7 @@ const PlantDashboard = () => {
                 <ResponsiveContainer width="100%" height={380}>
                   <AreaChart data={processedData.energyTrend} margin={{ top: 10, right: 30, left: 20, bottom: 30 }}>
                     <defs>
-                      <linearGradient id="energyGradient" x1="0" y1="0" x2="0" y2="1">
+                      <linearGradient id="energyGradientPlant" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#22c55e" stopOpacity={0.8}/>
                         <stop offset="95%" stopColor="#22c55e" stopOpacity={0.2}/>
                       </linearGradient>
@@ -605,7 +580,7 @@ const PlantDashboard = () => {
                       contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)' }} 
                     />
                     <Legend wrapperStyle={{ paddingTop: '10px' }} />
-                    <Area type="monotone" dataKey="energy" stroke="#22c55e" strokeWidth={3} fillOpacity={1} fill="url(#energyGradient)" name="Energy Consumption" />
+                    <Area type="monotone" dataKey="energy" stroke="#22c55e" strokeWidth={3} fillOpacity={1} fill="url(#energyGradientPlant)" name="Energy Consumption" />
                   </AreaChart>
                 </ResponsiveContainer>
               ) : (
@@ -613,10 +588,50 @@ const PlantDashboard = () => {
               )}
             </div>
           </div>
+
+          {/* Row 2: Uptime vs Downtime (Full Width) */}
+          <div className="charts-row">
+            <div className="chart-container chart-uptime">
+              <h3 className="chart-title">
+                Uptime vs Downtime
+                <span className="chart-subtitle">Operational availability percentage</span>
+              </h3>
+              {processedData.uptimeDowntime && processedData.uptimeDowntime.length > 0 ? (
+                <ResponsiveContainer width="100%" height={380}>
+                  <BarChart data={processedData.uptimeDowntime} margin={{ top: 10, right: 30, left: 20, bottom: 30 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis 
+                      dataKey="label" 
+                      tick={{ fontSize: 11 }} 
+                      stroke="#6b7280"
+                      label={{ value: 'Machine', position: 'insideBottom', offset: -10, fontSize: 12, fill: '#6b7280' }}
+                    />
+                    <YAxis 
+                      tick={{ fontSize: 11 }} 
+                      stroke="#6b7280" 
+                      domain={[0, 100]}
+                      tickFormatter={(value) => `${value}%`}
+                      label={{ value: 'Percentage', angle: -90, position: 'insideLeft', fontSize: 12, fill: '#6b7280' }} 
+                    />
+                    <Tooltip 
+                      formatter={uptimeTooltipFormatter} 
+                      labelFormatter={(label) => String(label)}
+                      contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)' }} 
+                    />
+                    <Legend wrapperStyle={{ paddingTop: '10px' }} />
+                    <Bar dataKey="uptimePercent" stackId="a" fill="#22c55e" name="Uptime" radius={[0, 0, 0, 0]} />
+                    <Bar dataKey="downtimePercent" stackId="a" fill="#ef4444" name="Downtime" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="empty-state">No uptime/downtime data available</div>
+              )}
+            </div>
+          </div>
         </>
       )}
 
-      {!isLoading && !processedData && !dashboardError && (
+      {!dashboardLoading && !dashboard && !dashboardError && (
         <div className="empty-state-container">
           <div className="empty-state-icon">📊</div>
           <h3>No Dashboard Data Available</h3>
@@ -629,3 +644,4 @@ const PlantDashboard = () => {
 };
 
 export default PlantDashboard;
+

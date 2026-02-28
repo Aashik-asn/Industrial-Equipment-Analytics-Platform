@@ -161,7 +161,7 @@ public class PlantDashboardService
                 })
                 .OrderBy(x => x.Time)
                 .ToListAsync();
-        }
+        }   
         else
         {
             result.EnergyTrend = await energyQuery

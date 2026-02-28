@@ -390,7 +390,10 @@ public class MachineDetailsService
             .Select(x => new AlertSummary
             {
                 Severity = x.Severity,
-                Parameter = x.Parameter
+                Parameter = x.Parameter,
+                Status = x.AlertStatus == "ACKNOWLEDGED"
+                    ? "ACKNOWLEDGED"
+                    : "PENDING"
             })
             .ToListAsync();
 

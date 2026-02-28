@@ -45,6 +45,7 @@ public class AlertSummary
 {
     public string? Severity { get; set; }
     public string? Parameter { get; set; }
+    public string Status { get; set; } = "";
 }
 
 public class ElectricalSnapshot

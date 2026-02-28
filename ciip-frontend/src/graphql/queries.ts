@@ -1,7 +1,6 @@
 import { gql } from '@apollo/client';
 
 // Simple plants query for filter dropdown, sidebar, and quick access
-// Backend Plant entity only has: plantId, plantName, plantCode, city, status, createdAt
 export const PLANTS_QUERY = gql`
   query Plants {
     plants {
@@ -45,6 +44,114 @@ export const DASHBOARD_QUERY = gql`
         plantName
         machines
         efficiency
+      }
+    }
+  }
+`;
+
+// Plant Dashboard query - specific to a plant with machines
+export const PLANT_DASHBOARD_QUERY = gql`
+  query PlantDashboard($plantId: UUID!, $from: DateTime, $to: DateTime) {
+    plantDashboard(plantId: $plantId, from: $from, to: $to) {
+      activeMachines
+      avgRuntime
+      plantEfficiency
+      totalEnergy
+      totalMachines
+      energyTrend {
+        energy
+        time
+      }
+      productionTrend {
+        actual
+        target
+        time
+      }
+      uptimeDowntime {
+        label
+        uptime
+        downtime
+      }
+      machines {
+        healthScore
+        machineCode
+        machineId
+        machineName
+        machineType
+        runtimeHours
+        status
+        avgLoad
+        currentLoad
+      }
+    }
+  }
+`;
+
+// Machine Details query
+export const MACHINE_DETAILS_QUERY = gql`
+  query MachineDetails($plantId: UUID!, $machineId: UUID!, $from: DateTime, $to: DateTime) {
+    machineDetails(plantId: $plantId, machineId: $machineId, from: $from, to: $to) {
+      healthScore
+      machineCode
+      machineId
+      machineName
+      runtimeHours
+      status
+      alerts {
+        parameter
+        severity
+      }
+      electrical {
+        rVoltage
+        yVoltage
+        bVoltage
+        rCurrent
+        yCurrent
+        bCurrent
+        frequency
+        powerFactor
+        energyImportKwh
+        energyImportKvah
+        energyExportKwh
+      }
+      environmental {
+        temperature
+        humidity
+        pressure
+        flowRate
+      }
+      mechanical {
+        rpm
+        vibrationX
+        vibrationY
+        vibrationZ
+      }
+      systemHealth {
+        overallHealth
+        performanceIndex
+        efficiencyScore
+      }
+      healthTrend {
+        time
+        value
+      }
+      loadTrend {
+        time
+        value
+      }
+      powerConsumptionTrend {
+        time
+        value
+      }
+      temperatureTrend {
+        time
+        value
+      }
+      vibrationTrend {
+        time
+        vibrationX
+        vibrationY
+        vibrationZ
       }
     }
   }
