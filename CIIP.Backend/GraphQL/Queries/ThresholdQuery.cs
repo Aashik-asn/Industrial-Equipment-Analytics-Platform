@@ -13,7 +13,7 @@ public class ThresholdQuery
     [Authorize]
     public async Task<List<ThresholdDto>> Thresholds(
         ClaimsPrincipal user,
-        string machineType,
+        string? machineType,
         [Service] CiipDbContext db)
     {
         var tenantId = Guid.Parse(user.FindFirst("tenantId")!.Value);

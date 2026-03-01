@@ -57,19 +57,23 @@ public class ProfileQuery
 
     [Authorize]
     public async Task<List<Machine>> Machines(
-        Guid plantId,
-        ClaimsPrincipal user,
-        [Service] CiipDbContext db)
+    Guid? plantId,
+    ClaimsPrincipal user,
+    [Service] CiipDbContext db)
     {
         var tenantId = Guid.Parse(
             user.FindFirst("tenantId")!.Value
         );
 
-        // ⭐ extra safety — verify plant belongs to tenant
-        return await db.Machines
-            .Where(m =>
-                m.PlantId == plantId &&
-                m.Plant!.TenantId == tenantId)
-            .ToListAsync();
+        var query = db.Machines
+            .Where(m => m.Plant!.TenantId == tenantId);
+
+        // Apply plant filter ONLY if provided
+        if (plantId.HasValue)
+        {
+            query = query.Where(m => m.PlantId == plantId.Value);
+        }
+
+        return await query.ToListAsync();
     }
 }

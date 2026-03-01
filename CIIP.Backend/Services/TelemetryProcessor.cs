@@ -217,6 +217,8 @@ public class TelemetryProcessor : BackgroundService
     // ======================================================
     // ALERT ENGINE (ONLY LOAD LOGIC CHANGED)
     // ======================================================
+    // ONLY REPLACE ProcessAlerts METHOD
+
     private async Task ProcessAlerts(CiipDbContext db)
     {
         var thresholdService = new ThresholdService(db);
@@ -226,25 +228,174 @@ public class TelemetryProcessor : BackgroundService
             .AsNoTracking()
             .ToDictionaryAsync(x => x.MachineId);
 
-        var telemetry = await db.TelemetryIngestions
+        var lastAlertTime = await db.AlertEvents
+            .OrderByDescending(a => a.GeneratedAt)
+            .Select(a => (DateTime?)a.GeneratedAt)
+            .FirstOrDefaultAsync();
+
+        var telemetryQuery = db.TelemetryIngestions
             .Include(t => t.Mechanical)
             .Include(t => t.Electrical)
             .Include(t => t.Environmental)
-            .AsNoTracking()
+            .AsNoTracking();
+
+        if (lastAlertTime.HasValue)
+            telemetryQuery = telemetryQuery
+                .Where(t => t.RecordedAt > lastAlertTime.Value);
+
+        var lastProcessedTime = await db.AlertEvents
+    .OrderByDescending(a => a.GeneratedAt)
+    .Select(a => (DateTime?)a.GeneratedAt)
+    .FirstOrDefaultAsync();
+
+        if (lastProcessedTime.HasValue)
+        {
+            telemetryQuery = telemetryQuery
+                .Where(t => t.RecordedAt > lastProcessedTime.Value);
+        }
+
+        var telemetry = await telemetryQuery
             .OrderBy(t => t.RecordedAt)
-            .Take(300)
             .ToListAsync();
 
         if (!telemetry.Any())
             return;
 
-        var newAlerts = new List<AlertEvent>();
+        foreach (var t in telemetry)
+        {
+            if (!machines.TryGetValue(t.MachineId, out var machine))
+                continue;
 
-        // ================= LOAD ALERTS FROM MACHINE HEALTH =================
-        var healthRows = await db.MachineHealth
-            .AsNoTracking()
+            if (machine.Plant == null)
+                continue;
+
+            var threshold = await thresholdService.GetThresholds(
+                machine.Plant.TenantId,
+                machine.MachineType,
+                t.RecordedAt);
+
+            decimal rpm = t.Mechanical?.Rpm ?? 0;
+            decimal vibration =
+                ((t.Mechanical?.VibrationX ?? 0)
+                + (t.Mechanical?.VibrationY ?? 0)
+                + (t.Mechanical?.VibrationZ ?? 0)) / 3m;
+
+            decimal temperature = t.Environmental?.Temperature ?? 0;
+
+            decimal maxCurrent = new[]
+            {
+            t.Electrical?.RCurrent ?? 0,
+            t.Electrical?.YCurrent ?? 0,
+            t.Electrical?.BCurrent ?? 0
+        }.Max();
+
+            // 🔧 Generic state-based alert handler
+            async Task HandleAlert(
+                string parameter,
+                bool condition,
+                string severity,
+                decimal value,
+                Guid? thresholdId)
+            {
+                var activeAlert = await db.AlertEvents
+                    .FirstOrDefaultAsync(a =>
+                        a.MachineId == t.MachineId &&
+                        a.Parameter == parameter &&
+                        a.AlertStatus == "ACTIVE");
+
+                if (condition)
+                {
+                    if (activeAlert == null)
+                    {
+                        db.AlertEvents.Add(new AlertEvent
+                        {
+                            AlertId = Guid.NewGuid(),
+                            MachineId = t.MachineId,
+                            Parameter = parameter,
+                            Severity = severity,
+                            ActualValue = value,
+                            AlertStatus = "ACTIVE",
+                            GeneratedAt = t.RecordedAt,
+                            ThresholdId = thresholdId
+                        });
+                    }
+                }
+                else
+                {
+                    if (activeAlert != null)
+                    {
+                        activeAlert.AlertStatus = "PENDING";
+                    }
+                }
+            }
+
+            // ================= MACHINE STATUS =================
+            await HandleAlert(
+                "MachineStatus",
+                rpm <= 200m,
+                "WARNING",
+                rpm,
+                null);
+
+            // ================= RPM HIGH =================
+            await HandleAlert(
+                "RPM_HIGH",
+                rpm >= threshold.RpmWarningHigh,
+                rpm >= threshold.RpmCriticalHigh ? "CRITICAL" : "WARNING",
+                rpm,
+                threshold.RpmHighThresholdId);
+
+            // ================= RPM LOW =================
+            await HandleAlert(
+                "RPM_LOW",
+                rpm <= threshold.RpmWarningLow,
+                rpm <= threshold.RpmCriticalLow ? "CRITICAL" : "WARNING",
+                rpm,
+                threshold.RpmLowThresholdId);
+
+            // ================= VIBRATION =================
+            await HandleAlert(
+                "Vibration",
+                vibration >= threshold.VibrationWarning,
+                vibration >= threshold.VibrationCritical ? "CRITICAL" : "WARNING",
+                vibration,
+                threshold.VibrationThresholdId);
+
+            // ================= CURRENT =================
+            await HandleAlert(
+                "Current",
+                maxCurrent >= threshold.CurrentWarning,
+                maxCurrent >= threshold.CurrentCritical ? "CRITICAL" : "WARNING",
+                maxCurrent,
+                threshold.CurrentThresholdId);
+
+            // ================= TEMPERATURE =================
+            await HandleAlert(
+                "Temperature",
+                temperature >= threshold.TemperatureWarning,
+                temperature >= threshold.TemperatureCritical ? "CRITICAL" : "WARNING",
+                temperature,
+                threshold.TemperatureThresholdId);
+        }
+
+        // ================= LOAD ALERTS (STATE BASED) =================
+
+        var lastLoadAlertTime = await db.AlertEvents
+    .Where(a => a.Parameter == "LOAD_HIGH")
+    .OrderByDescending(a => a.GeneratedAt)
+    .Select(a => (DateTime?)a.GeneratedAt)
+    .FirstOrDefaultAsync();
+
+        var healthQuery = db.MachineHealth.AsNoTracking();
+
+        if (lastLoadAlertTime.HasValue)
+        {
+            healthQuery = healthQuery
+                .Where(h => h.RecordedAt > lastLoadAlertTime.Value);
+        }
+
+        var healthRows = await healthQuery
             .OrderBy(h => h.RecordedAt)
-            .Take(300)
             .ToListAsync();
 
         foreach (var h in healthRows)
@@ -255,130 +406,60 @@ public class TelemetryProcessor : BackgroundService
             if (machine.Plant == null)
                 continue;
 
-            var threshold = await thresholdService
-                .GetThresholds(machine.Plant.TenantId, machine.MachineType);
+            var threshold = await thresholdService.GetThresholds(
+                machine.Plant.TenantId,
+                machine.MachineType,
+                h.RecordedAt);
 
-            var timeUtc = h.RecordedAt;
-            decimal avgLoad = h.AvgLoad;
+            var activeAlert = await db.AlertEvents
+                .FirstOrDefaultAsync(a =>
+                    a.MachineId == h.MachineId &&
+                    a.Parameter == "LOAD_HIGH" &&
+                    a.AlertStatus == "ACTIVE");
 
-            bool exists = await db.AlertEvents.AnyAsync(a =>
-                a.MachineId == h.MachineId &&
-                a.Parameter == "LOAD_HIGH" &&
-                a.GeneratedAt == timeUtc);
+            bool condition = h.AvgLoad >= threshold.LoadHighWarning;
 
-            if (!exists)
+            if (condition)
             {
-                if (avgLoad >= threshold.LoadHighCritical)
+                if (activeAlert == null)
                 {
-                    newAlerts.Add(new AlertEvent
+                    db.AlertEvents.Add(new AlertEvent
                     {
                         AlertId = Guid.NewGuid(),
                         MachineId = h.MachineId,
                         Parameter = "LOAD_HIGH",
-                        Severity = "CRITICAL",
-                        ActualValue = avgLoad,
+                        Severity = h.AvgLoad >= threshold.LoadHighCritical ? "CRITICAL" : "WARNING",
+                        ActualValue = h.AvgLoad,
                         AlertStatus = "ACTIVE",
-                        GeneratedAt = timeUtc,
-                        ThresholdId = threshold.LoadHighThresholdId
-                    });
-                }
-                else if (avgLoad >= threshold.LoadHighWarning)
-                {
-                    newAlerts.Add(new AlertEvent
-                    {
-                        AlertId = Guid.NewGuid(),
-                        MachineId = h.MachineId,
-                        Parameter = "LOAD_HIGH",
-                        Severity = "WARNING",
-                        ActualValue = avgLoad,
-                        AlertStatus = "ACTIVE",
-                        GeneratedAt = timeUtc,
+                        GeneratedAt = h.RecordedAt,
                         ThresholdId = threshold.LoadHighThresholdId
                     });
                 }
             }
-        }
-
-        // ================= ORIGINAL TELEMETRY ALERTS =================
-        foreach (var t in telemetry)
-        {
-            if (!machines.TryGetValue(t.MachineId, out var machine))
-                continue;
-
-            if (machine.Plant == null)
-                continue;
-
-            var threshold = await thresholdService
-                .GetThresholds(machine.Plant.TenantId, machine.MachineType);
-
-            var timeUtc = t.RecordedAt;
-
-            async Task TryAdd(string parameter, decimal value, string severity, Guid? thresholdId)
+            else
             {
-                bool exists = await db.AlertEvents.AnyAsync(a =>
-                    a.MachineId == t.MachineId &&
-                    a.Parameter == parameter &&
-                    a.GeneratedAt == timeUtc);
-
-                if (!exists)
-                {
-                    newAlerts.Add(new AlertEvent
-                    {
-                        AlertId = Guid.NewGuid(),
-                        MachineId = t.MachineId,
-                        Parameter = parameter,
-                        Severity = severity,
-                        ActualValue = value,
-                        AlertStatus = "ACTIVE",
-                        GeneratedAt = timeUtc,
-                        ThresholdId = thresholdId
-                    });
-                }
+                if (activeAlert != null)
+                    activeAlert.AlertStatus = "PENDING";
             }
-
-            decimal vibration =
-                ((t.Mechanical?.VibrationX ?? 0)
-                + (t.Mechanical?.VibrationY ?? 0)
-                + (t.Mechanical?.VibrationZ ?? 0)) / 3m;
-
-            decimal rpm = t.Mechanical?.Rpm ?? 0;
-            decimal temperature = t.Environmental?.Temperature ?? 0;
-
-            decimal maxCurrent = new[]
-            {
-                t.Electrical?.RCurrent ?? 0,
-                t.Electrical?.YCurrent ?? 0,
-                t.Electrical?.BCurrent ?? 0
-            }.Max();
-
-            if (rpm <= 200m)
-                await TryAdd("MachineStatus", rpm, "WARNING", null);
-
-            if (vibration >= threshold.VibrationCritical)
-                await TryAdd("Vibration", vibration, "CRITICAL", threshold.VibrationThresholdId);
-            else if (vibration >= threshold.VibrationWarning)
-                await TryAdd("Vibration", vibration, "WARNING", threshold.VibrationThresholdId);
-
-            if (maxCurrent >= threshold.CurrentCritical)
-                await TryAdd("Current", maxCurrent, "CRITICAL", threshold.CurrentThresholdId);
-            else if (maxCurrent >= threshold.CurrentWarning)
-                await TryAdd("Current", maxCurrent, "WARNING", threshold.CurrentThresholdId);
-
-            if (rpm < threshold.RpmCriticalLow)
-                await TryAdd("RPM", rpm, "CRITICAL", threshold.RpmLowThresholdId);
-            else if (rpm > threshold.RpmCriticalHigh)
-                await TryAdd("RPM", rpm, "CRITICAL", threshold.RpmHighThresholdId);
-
-            if (temperature >= threshold.TemperatureCritical)
-                await TryAdd("Temperature", temperature, "CRITICAL", threshold.TemperatureThresholdId);
-            else if (temperature >= threshold.TemperatureWarning)
-                await TryAdd("Temperature", temperature, "WARNING", threshold.TemperatureThresholdId);
         }
 
-        if (newAlerts.Count > 0)
+        // ================= ACKNOWLEDGEMENT SYNC =================
+
+        var acknowledgedIds = await db.AlertAcknowledgements
+            .Select(x => x.AlertId)
+            .ToListAsync();
+
+        var activeAlerts = await db.AlertEvents
+            .Where(a =>
+                a.AlertStatus == "ACTIVE" &&
+                acknowledgedIds.Contains(a.AlertId))
+            .ToListAsync();
+
+        foreach (var alert in activeAlerts)
         {
-            await db.AlertEvents.AddRangeAsync(newAlerts);
-            await db.SaveChangesAsync();
+            alert.AlertStatus = "ACKNOWLEDGED";
         }
+
+        await db.SaveChangesAsync();
     }
 }

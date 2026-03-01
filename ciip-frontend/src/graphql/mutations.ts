@@ -92,6 +92,32 @@ export const UPDATE_TENANT_NAME_MUTATION = `
   }
 `;
 
+export const UPSERT_PLANT_MUTATION = `
+  mutation UpsertPlant($plantCode: String!, $plantName: String!, $city: String!) {
+    upsertPlant(plantCode: $plantCode, plantName: $plantName, city: $city) {
+      city
+      createdAt
+      plantCode
+      plantId
+      plantName
+      status
+      tenantId
+    }
+  }
+`;
+
+export const INSERT_THRESHOLD_MUTATION = `
+  mutation InsertThreshold($input: ThresholdInput!) {
+    insertThreshold(input: $input) {
+      criticalValue
+      machineType
+      parameter
+      tenantId
+      warningValue
+    }
+  }
+`;
+
 export async function login(email: string, password: string) {
   return executeMutation(LOGIN_MUTATION, { email, password });
 }

@@ -127,7 +127,7 @@ public class DashboardService
             .AsNoTracking()
             .Where(a =>
                 machineIds.Contains(a.MachineId) &&
-                a.AlertStatus == "ACTIVE");
+                a.AlertStatus == "PENDING");
 
         if (fromLocal.HasValue)
             alertQuery = alertQuery.Where(a => a.GeneratedAt >= fromLocal.Value);

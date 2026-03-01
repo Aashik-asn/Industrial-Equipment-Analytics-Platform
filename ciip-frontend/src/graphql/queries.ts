@@ -4,8 +4,13 @@ import { gql } from '@apollo/client';
 export const PLANTS_QUERY = gql`
   query Plants {
     plants {
+      city
+      createdAt
+      plantCode
       plantId
       plantName
+      status
+      tenantId
     }
   }
 `;
@@ -22,6 +27,32 @@ export const TENANT_PROFILE_QUERY = gql`
       role
       tenantId
       userId
+    }
+  }
+`;
+
+export const THRESHOLDS_QUERY = gql`
+  query Thresholds($machineType: String) {
+    thresholds(machineType: $machineType) {
+      criticalValue
+      machineType
+      parameter
+      tenantId
+      warningValue
+    }
+  }
+`;
+
+export const MACHINES_QUERY = gql`
+  query Machines($plantId: UUID) {
+    machines(plantId: $plantId) {
+      createdAt
+      machineCode
+      machineId
+      machineName
+      machineType
+      plantId
+      status
     }
   }
 `;

@@ -13,12 +13,25 @@ public class ThresholdService
         _db = db;
     }
 
-    public async Task<ThresholdConfig> GetThresholds(Guid tenantId, string machineType)
+    public async Task<ThresholdConfig> GetThresholds(
+        Guid tenantId,
+        string machineType,
+        DateTime effectiveTime)
     {
+        // Ensure UTC (required for timestamptz)
+        effectiveTime = DateTime.SpecifyKind(effectiveTime, DateTimeKind.Utc);
+
         var rows = await _db.AlertThresholds
             .AsNoTracking()
-            .Where(x => x.TenantId == tenantId || x.TenantId == null)
-            .OrderByDescending(x => x.CreatedAt)
+            .Where(x =>
+                (x.TenantId == tenantId || x.TenantId == null) &&
+                (x.UpdatedAt > x.CreatedAt
+                    ? x.UpdatedAt
+                    : x.CreatedAt) <= effectiveTime)
+            .OrderByDescending(x =>
+                x.UpdatedAt > x.CreatedAt
+                    ? x.UpdatedAt
+                    : x.CreatedAt)
             .ToListAsync();
 
         AlertThreshold Resolve(string parameter)
@@ -31,13 +44,13 @@ public class ThresholdService
             if (tMachine != null)
                 return tMachine;
 
-            var tGlobal = rows.FirstOrDefault(x =>
+            var tTenant = rows.FirstOrDefault(x =>
                 x.Parameter == parameter &&
                 x.TenantId == tenantId &&
                 x.MachineType == null);
 
-            if (tGlobal != null)
-                return tGlobal;
+            if (tTenant != null)
+                return tTenant;
 
             return rows.First(x =>
                 x.Parameter == parameter &&
@@ -84,6 +97,4 @@ public class ThresholdService
             LoadLowThresholdId = loadLow.ThresholdId
         };
     }
-
-
 }
