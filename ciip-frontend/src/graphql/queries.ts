@@ -13,6 +13,19 @@ export const PLANTS_QUERY = gql`
 // Alias for backward compatibility
 export const PLANTS_SIMPLE_QUERY = PLANTS_QUERY;
 
+export const TENANT_PROFILE_QUERY = gql`
+  query TenantProfile {
+    tenantProfile {
+      createdAt
+      email
+      passwordHash
+      role
+      tenantId
+      userId
+    }
+  }
+`;
+
 // Dashboard query - uses proper GraphQL types (UUID, DateTime)
 export const DASHBOARD_QUERY = gql`
   query Dashboard($plantId: UUID, $from: DateTime, $to: DateTime) {

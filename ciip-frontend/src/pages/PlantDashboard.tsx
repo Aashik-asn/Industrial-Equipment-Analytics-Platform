@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery } from '@apollo/client';
+import { useQuery, useApolloClient } from '@apollo/client';
 import {
 
   XAxis,
@@ -131,8 +131,15 @@ const PlantDashboard = () => {
   const plantId = params.plantId;
   const navigate = useNavigate();
 
+  const client = useApolloClient();
   const [dateFrom, setDateFrom] = useState<string>('');
   const [dateTo, setDateTo] = useState<string>('');
+
+  // Reset filters when changing plant
+  useEffect(() => {
+    setDateFrom('');
+    setDateTo('');
+  }, [plantId]);
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   const getDashboardVariables = () => {
@@ -162,6 +169,7 @@ const PlantDashboard = () => {
   } = useQuery(PLANT_DASHBOARD_QUERY, {
     variables: getDashboardVariables(),
     skip: !plantId,
+    fetchPolicy: 'cache-and-network', // Ensure fresh data on refetch
   });
 
   const { data: plantsData } = useQuery(PLANTS_QUERY);
@@ -196,28 +204,31 @@ const PlantDashboard = () => {
   }, [dashboard?.productionTrend]);
 
   // Process chart data
-  const processedData = useMemo(() => {
-    if (!dashboard) return null;
+  const processData = (data: PlantDashboardData) => {
     return {
-      productionTrend: dashboard.productionTrend?.map((point) => ({
+      productionTrend: data.productionTrend?.map((point) => ({
         ...point,
         timeFormatted: formatDateFull(point.time),
         timeTick: isMultiDay ? formatDateOnly(point.time) : formatTimeOnly(point.time),
         timeNumeric: dayjs(point.time).valueOf(),
       })) || [],
-      energyTrend: dashboard.energyTrend?.map((point) => ({
+      energyTrend: data.energyTrend?.map((point) => ({
         ...point,
         timeFormatted: formatDateFull(point.time),
         timeTick: isMultiDay ? formatDateOnly(point.time) : formatTimeOnly(point.time),
         timeNumeric: dayjs(point.time).valueOf(),
       })) || [],
-      uptimeDowntime: dashboard.uptimeDowntime?.map((point) => ({
+      uptimeDowntime: data.uptimeDowntime?.map((point) => ({
         ...point,
         uptimePercent: point.uptime,
         downtimePercent: point.downtime,
       })) || [],
     };
-  }, [dashboard, isMultiDay]);
+  };
+
+  const processedData = useMemo(() => {
+    return dashboardData?.plantDashboard ? processData(dashboardData.plantDashboard) : null;
+  }, [dashboardData, isMultiDay]);
 
   // Filter machines based on search query
   const filteredMachines = useMemo(() => {
@@ -232,8 +243,8 @@ const PlantDashboard = () => {
     );
   }, [dashboard?.machines, searchQuery]);
 
-  const handleRefresh = () => {
-    refetchDashboard(getDashboardVariables());
+  const handleRefresh = async () => {
+    await client.refetchQueries({ include: "active" });
   };
 
   // Custom tooltip formatter for Production chart
@@ -304,6 +315,7 @@ const PlantDashboard = () => {
                 type="date"
                 className="filter-date"
                 value={dateFrom}
+                max="9999-12-31"
                 onChange={(e) => setDateFrom(e.target.value)}
               />
               <span className="date-separator">to</span>
@@ -311,6 +323,7 @@ const PlantDashboard = () => {
                 type="date"
                 className="filter-date"
                 value={dateTo}
+                max="9999-12-31"
                 onChange={(e) => setDateTo(e.target.value)}
               />
             </div>
@@ -409,7 +422,7 @@ const PlantDashboard = () => {
                 <div
                   key={machine.machineId}
                   className="machine-card"
-                  onClick={() => navigate(`/machine-details/${machine.machineId}`)}
+                  onClick={() => navigate(`/machine-details/${machine.machineId}`, { state: { plantId: plantId } })}
                 >
                   <div className="machine-card-header">
                     <div>

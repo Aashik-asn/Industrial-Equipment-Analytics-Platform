@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useQuery } from '@apollo/client';
+import { useQuery, useApolloClient } from '@apollo/client';
 import { useNavigate } from 'react-router-dom';
 import {
   LineChart,
@@ -101,12 +101,12 @@ const generateFourHourTicks = (fromDate: string, toDate: string): number[] => {
   const ticks: number[] = [];
   let current = dayjs(fromDate).startOf('day');
   const end = dayjs(toDate).endOf('day');
-  
+
   while (current.isBefore(end) || current.isSame(end, 'day')) {
     ticks.push(current.valueOf());
     current = current.add(4, 'hour');
   }
-  
+
   return ticks;
 };
 
@@ -117,15 +117,16 @@ const formatTick = (value: number): string => {
 
 const Dashboard = () => {
   const navigate = useNavigate();
+  const client = useApolloClient();
   const [selectedPlant, setSelectedPlant] = useState<string | null>(null);
   const [dateFrom, setDateFrom] = useState<string>('');
   const [dateTo, setDateTo] = useState<string>('');
 
   // Query for simple plants list (filter dropdown)
-  const { 
-    data: simplePlantsData, 
-    loading: simplePlantsLoading, 
-    error: simplePlantsError 
+  const {
+    data: simplePlantsData,
+    loading: simplePlantsLoading,
+    error: simplePlantsError
   } = useQuery(PLANTS_SIMPLE_QUERY);
 
   const getDashboardVariables = () => {
@@ -243,8 +244,8 @@ const Dashboard = () => {
   const alertCounts = getAlertCountsBySeverity();
   const isLoading = simplePlantsLoading || dashboardLoading;
 
-  const handleRefresh = () => {
-    refetchDashboard(getDashboardVariables());
+  const handleRefresh = async () => {
+    await client.refetchQueries({ include: "active" });
   };
 
   const handlePlantClick = (plantId: string) => {
@@ -304,9 +305,9 @@ const Dashboard = () => {
           <div className="filter-group">
             <label className="filter-label">Date Range</label>
             <div className="date-range-inputs">
-              <input type="date" className="filter-date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+              <input type="date" className="filter-date" value={dateFrom} max="9999-12-31" onChange={(e) => setDateFrom(e.target.value)} />
               <span className="date-separator">to</span>
-              <input type="date" className="filter-date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+              <input type="date" className="filter-date" value={dateTo} max="9999-12-31" onChange={(e) => setDateTo(e.target.value)} />
             </div>
           </div>
           <button className="refresh-button" onClick={handleRefresh} disabled={isLoading}>
@@ -339,7 +340,7 @@ const Dashboard = () => {
             <div className="kpi-card kpi-card-machines">
               <div className="kpi-card-icon">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" stroke="#3b82f6"/>
+                  <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" stroke="#3b82f6" />
                 </svg>
               </div>
               <div className="kpi-card-title">Active Machines</div>
@@ -351,9 +352,9 @@ const Dashboard = () => {
             <div className="kpi-card kpi-card-alerts">
               <div className="kpi-card-icon">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-                  <line x1="12" y1="9" x2="12" y2="13"/>
-                  <line x1="12" y1="17" x2="12.01" y2="17"/>
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                  <line x1="12" y1="9" x2="12" y2="13" />
+                  <line x1="12" y1="17" x2="12.01" y2="17" />
                 </svg>
               </div>
               <div className="kpi-card-title">Active Alerts</div>
@@ -367,7 +368,7 @@ const Dashboard = () => {
             <div className="kpi-card kpi-card-efficiency">
               <div className="kpi-card-icon">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                  <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
                 </svg>
               </div>
               <div className="kpi-card-title">Average Efficiency</div>
@@ -379,9 +380,9 @@ const Dashboard = () => {
             <div className="kpi-card kpi-card-production">
               <div className="kpi-card-icon">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <line x1="18" y1="20" x2="18" y2="10"/>
-                  <line x1="12" y1="20" x2="12" y2="4"/>
-                  <line x1="6" y1="20" x2="6" y2="14"/>
+                  <line x1="18" y1="20" x2="18" y2="10" />
+                  <line x1="12" y1="20" x2="12" y2="4" />
+                  <line x1="6" y1="20" x2="6" y2="14" />
                 </svg>
               </div>
               <div className="kpi-card-title">Production vs Target</div>
@@ -402,31 +403,31 @@ const Dashboard = () => {
                   <LineChart data={processedData.oeeTrend} margin={{ top: 10, right: 30, left: 20, bottom: 30 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                     {isMultiDay ? (
-                      <XAxis 
-                        dataKey="timeTick" 
-                        tick={{ fontSize: 11 }} 
-                        stroke="#6b7280" 
+                      <XAxis
+                        dataKey="timeTick"
+                        tick={{ fontSize: 11 }}
+                        stroke="#6b7280"
                         interval={0}
-                        label={{ value: 'Date', position: 'insideBottom', offset: -10, fontSize: 12, fill: '#6b7280' }} 
+                        label={{ value: 'Date', position: 'insideBottom', offset: -10, fontSize: 12, fill: '#6b7280' }}
                       />
                     ) : (
-                      <XAxis 
+                      <XAxis
                         type="number"
                         scale="time"
                         dataKey="timeNumeric"
                         domain={timeDomain}
                         ticks={fourHourTicks}
                         tickFormatter={formatTick}
-                        tick={{ fontSize: 11 }} 
+                        tick={{ fontSize: 11 }}
                         stroke="#6b7280"
                         label={{ value: 'Time', position: 'insideBottom', offset: -10, fontSize: 12, fill: '#6b7280' }}
                       />
                     )}
                     <YAxis tick={{ fontSize: 11 }} stroke="#6b7280" domain={[0, 100]} tickFormatter={(value) => `${value}%`} label={{ value: 'Efficiency (%)', angle: -90, position: 'insideLeft', fontSize: 12, fill: '#6b7280' }} />
-                    <Tooltip 
-                      formatter={oeeTooltipFormatter} 
+                    <Tooltip
+                      formatter={oeeTooltipFormatter}
                       labelFormatter={tooltipLabelFormatter}
-                      contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)' }} 
+                      contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)' }}
                     />
                     <Legend wrapperStyle={{ paddingTop: '10px' }} />
                     <Line type="monotone" dataKey="availability" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 6 }} name="Availability" />
@@ -448,25 +449,25 @@ const Dashboard = () => {
                 <div className="alert-donut-container">
                   <ResponsiveContainer width="100%" height={250}>
                     <PieChart>
-                      <Pie 
-                        data={alertData} 
-                        cx="50%" 
-                        cy="50%" 
-                        innerRadius={60} 
-                        outerRadius={90} 
-                        paddingAngle={2} 
+                      <Pie
+                        data={alertData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={90}
+                        paddingAngle={2}
                         dataKey="count"
                       >
                         {alertData.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={entry.color} stroke="#fff" strokeWidth={2} />
                         ))}
                       </Pie>
-                      <Tooltip 
+                      <Tooltip
                         formatter={(value, _name, props) => {
                           const item = alertData[(props as { payload?: { index?: number } })?.payload?.index || 0];
                           return [`${value} alerts (${item?.percentage || 0}%)`, item?.severity || ''];
-                        }} 
-                        contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)' }} 
+                        }}
+                        contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)' }}
                       />
                     </PieChart>
                   </ResponsiveContainer>
@@ -499,31 +500,31 @@ const Dashboard = () => {
                   <BarChart data={processedData.productionTrend} margin={{ top: 10, right: 30, left: 20, bottom: 30 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                     {isMultiDay ? (
-                      <XAxis 
-                        dataKey="timeTick" 
-                        tick={{ fontSize: 11 }} 
-                        stroke="#6b7280" 
+                      <XAxis
+                        dataKey="timeTick"
+                        tick={{ fontSize: 11 }}
+                        stroke="#6b7280"
                         interval={0}
-                        label={{ value: 'Date', position: 'insideBottom', offset: -10, fontSize: 12, fill: '#6b7280' }} 
+                        label={{ value: 'Date', position: 'insideBottom', offset: -10, fontSize: 12, fill: '#6b7280' }}
                       />
                     ) : (
-                      <XAxis 
+                      <XAxis
                         type="number"
                         scale="time"
                         dataKey="timeNumeric"
                         domain={timeDomain}
                         ticks={fourHourTicks}
                         tickFormatter={formatTick}
-                        tick={{ fontSize: 11 }} 
+                        tick={{ fontSize: 11 }}
                         stroke="#6b7280"
                         label={{ value: 'Time', position: 'insideBottom', offset: -10, fontSize: 12, fill: '#6b7280' }}
                       />
                     )}
                     <YAxis tick={{ fontSize: 11 }} stroke="#6b7280" label={{ value: 'Production Units', angle: -90, position: 'insideLeft', fontSize: 12, fill: '#6b7280' }} />
-                    <Tooltip 
-                      formatter={productionTooltipFormatter} 
+                    <Tooltip
+                      formatter={productionTooltipFormatter}
                       labelFormatter={tooltipLabelFormatter}
-                      contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)' }} 
+                      contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)' }}
                     />
                     <Legend wrapperStyle={{ paddingTop: '10px' }} />
                     <Bar dataKey="actual" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Actual" />
@@ -545,37 +546,37 @@ const Dashboard = () => {
                   <AreaChart data={processedData.energyTrend} margin={{ top: 10, right: 30, left: 20, bottom: 30 }}>
                     <defs>
                       <linearGradient id="energyGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#22c55e" stopOpacity={0.8}/>
-                        <stop offset="95%" stopColor="#22c55e" stopOpacity={0.2}/>
+                        <stop offset="5%" stopColor="#22c55e" stopOpacity={0.8} />
+                        <stop offset="95%" stopColor="#22c55e" stopOpacity={0.2} />
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                     {isMultiDay ? (
-                      <XAxis 
-                        dataKey="timeTick" 
-                        tick={{ fontSize: 11 }} 
-                        stroke="#6b7280" 
+                      <XAxis
+                        dataKey="timeTick"
+                        tick={{ fontSize: 11 }}
+                        stroke="#6b7280"
                         interval={0}
-                        label={{ value: 'Date', position: 'insideBottom', offset: -10, fontSize: 12, fill: '#6b7280' }} 
+                        label={{ value: 'Date', position: 'insideBottom', offset: -10, fontSize: 12, fill: '#6b7280' }}
                       />
                     ) : (
-                      <XAxis 
+                      <XAxis
                         type="number"
                         scale="time"
                         dataKey="timeNumeric"
                         domain={timeDomain}
                         ticks={fourHourTicks}
                         tickFormatter={formatTick}
-                        tick={{ fontSize: 11 }} 
+                        tick={{ fontSize: 11 }}
                         stroke="#6b7280"
                         label={{ value: 'Time', position: 'insideBottom', offset: -10, fontSize: 12, fill: '#6b7280' }}
                       />
                     )}
                     <YAxis tick={{ fontSize: 11 }} stroke="#6b7280" label={{ value: 'Energy (kWh)', angle: -90, position: 'insideLeft', fontSize: 12, fill: '#6b7280' }} />
-                    <Tooltip 
-                      formatter={energyTooltipFormatter} 
+                    <Tooltip
+                      formatter={energyTooltipFormatter}
                       labelFormatter={tooltipLabelFormatter}
-                      contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)' }} 
+                      contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)' }}
                     />
                     <Legend wrapperStyle={{ paddingTop: '10px' }} />
                     <Area type="monotone" dataKey="energy" stroke="#22c55e" strokeWidth={3} fillOpacity={1} fill="url(#energyGradient)" name="Energy Consumption" />

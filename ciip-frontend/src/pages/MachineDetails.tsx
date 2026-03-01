@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery } from '@apollo/client';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useQuery, useApolloClient } from '@apollo/client';
 import {
   LineChart,
   Line,
@@ -161,6 +161,9 @@ const MachineDetails = (): React.ReactElement => {
   const params = useParams();
   const machineId = params.machineId;
   const navigate = useNavigate();
+  const location = useLocation();
+  const client = useApolloClient();
+  const activePlantId = (location.state as any)?.plantId || '00000000-0000-0000-0000-000000000000';
 
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [dateFrom, setDateFrom] = useState<string>('');
@@ -171,7 +174,7 @@ const MachineDetails = (): React.ReactElement => {
   const getQueryVariables = () => {
     const variables: Record<string, unknown> = {
       machineId: machineId,
-      plantId: '00000000-0000-0000-0000-000000000000',
+      plantId: activePlantId,
     };
     if (dateFrom) {
       const fromDate = new Date(dateFrom);
@@ -258,8 +261,8 @@ const MachineDetails = (): React.ReactElement => {
     };
   }, [machine, isMultiDay]);
 
-  const handleRefresh = () => {
-    refetchMachine(getQueryVariables());
+  const handleRefresh = async () => {
+    await client.refetchQueries({ include: "active" });
   };
 
   // Custom tooltip formatter
@@ -353,6 +356,7 @@ const MachineDetails = (): React.ReactElement => {
                 type="date"
                 className="filter-date"
                 value={dateFrom}
+                max="9999-12-31"
                 onChange={(e) => setDateFrom(e.target.value)}
               />
               <span className="date-separator">to</span>
@@ -360,6 +364,7 @@ const MachineDetails = (): React.ReactElement => {
                 type="date"
                 className="filter-date"
                 value={dateTo}
+                max="9999-12-31"
                 onChange={(e) => setDateTo(e.target.value)}
               />
             </div>
@@ -517,7 +522,16 @@ const MachineDetails = (): React.ReactElement => {
               {/* Alerts */}
               {machine.alerts && machine.alerts.length > 0 && (
                 <div className="section-card">
-                  <h3 className="section-title">Alerts</h3>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <h3 className="section-title" style={{ marginBottom: 0 }}>Alerts</h3>
+                    <div
+                      className="view-alerts-link"
+                      onClick={() => navigate(`/plant-alerts/${getQueryVariables().plantId}`)}
+                      style={{ color: '#3b82f6', fontSize: '14px', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                    >
+                      View All Plant Alerts &rarr;
+                    </div>
+                  </div>
                   <div className="alerts-list">
                     {[...machine.alerts]
                       .filter((a: Alert) => ['ACTIVE', 'PENDING', 'ACKNOWLEDGED'].includes(a.status.toUpperCase()))

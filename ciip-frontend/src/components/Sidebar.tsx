@@ -15,8 +15,7 @@ const Sidebar = () => {
   const params = useParams();
   const plantId = params.plantId;
   const [isPlantSectionExpanded, setIsPlantSectionExpanded] = useState(false);
-
-
+  const [isAlertSectionExpanded, setIsAlertSectionExpanded] = useState(false);
   const { data: plantsData } = useQuery(PLANTS_QUERY);
   const plants: Plant[] = plantsData?.plants || [];
 
@@ -30,13 +29,22 @@ const Sidebar = () => {
   };
 
   const isPlantDashboardActive = location.pathname.startsWith('/plant-dashboard');
+  const isAlertDashboardActive = location.pathname.startsWith('/plant-alerts');
 
   const togglePlantSection = () => {
     setIsPlantSectionExpanded(!isPlantSectionExpanded);
   };
 
-  const handlePlantClick = (plantId: string) => {
-    navigate(`/plant-dashboard/${plantId}`);
+  const toggleAlertSection = () => {
+    setIsAlertSectionExpanded(!isAlertSectionExpanded);
+  };
+
+  const handlePlantClick = (id: string) => {
+    navigate(`/plant-dashboard/${id}`);
+  };
+
+  const handleAlertClick = (id: string) => {
+    navigate(`/plant-alerts/${id}`);
   };
 
   return (
@@ -88,17 +96,31 @@ const Sidebar = () => {
             </ul>
           </li>
 
-          {/* Alert Management */}
+          {/* Alert Management - Collapsible Section */}
           <li className="nav-item">
-            <NavLink
-              to="/alerts"
-              className={({ isActive }) =>
-                isActive ? 'nav-link active' : 'nav-link'
-              }
+            <div
+              className={`nav-link collapsible ${isAlertDashboardActive ? 'active' : ''}`}
+              onClick={toggleAlertSection}
             >
               <span className="nav-icon">{getIcon('alert')}</span>
               <span className="nav-label">Alert Management</span>
-            </NavLink>
+              <span className={`collapse-icon ${isAlertSectionExpanded ? 'expanded' : ''}`}>
+                ▼
+              </span>
+            </div>
+            <ul className={`sub-nav-list ${isAlertSectionExpanded ? 'expanded' : ''}`}>
+              {plants.map((plant) => (
+                <li key={plant.plantId} className="sub-nav-item">
+                  <div
+                    className={`sub-nav-link ${isAlertDashboardActive && plantId === plant.plantId ? 'active' : ''}`}
+                    onClick={() => handleAlertClick(plant.plantId)}
+                  >
+                    <span className="sub-nav-bullet">•</span>
+                    <span className="sub-nav-label">{plant.plantName}</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
           </li>
 
           {/* Profile */}

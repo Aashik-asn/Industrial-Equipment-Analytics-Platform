@@ -59,6 +59,39 @@ export const REGISTER_TENANT_MUTATION = `
   }
 `;
 
+// New Profile Page Mutations
+export const CHANGE_PASSWORD_MUTATION = `
+  mutation ChangePassword($newPassword: String!) {
+    changePassword(newPassword: $newPassword)
+  }
+`;
+
+export const UPDATE_PROFILE_MUTATION = `
+  mutation UpdateProfile($email: String!) {
+    updateProfile(email: $email) {
+      createdAt
+      email
+      passwordHash
+      role
+      tenantId
+      userId
+    }
+  }
+`;
+
+export const UPDATE_TENANT_NAME_MUTATION = `
+  mutation UpdateTenantName($tenantName: String!) {
+    updateTenantName(tenantName: $tenantName) {
+      createdAt
+      email
+      passwordHash
+      status
+      tenantId
+      tenantName
+    }
+  }
+`;
+
 export async function login(email: string, password: string) {
   return executeMutation(LOGIN_MUTATION, { email, password });
 }
