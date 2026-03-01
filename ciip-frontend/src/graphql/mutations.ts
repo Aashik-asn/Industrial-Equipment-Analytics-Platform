@@ -106,6 +106,28 @@ export const UPSERT_PLANT_MUTATION = `
   }
 `;
 
+export const ADD_MACHINE_MUTATION = `
+  mutation AddMachine($plantId: UUID!, $machineCode: String!, $machineName: String!, $machineType: String!, $gatewayCode: String!, $endpointType: String!, $protocol: String!) {
+    addMachine(
+      plantId: $plantId
+      machineCode: $machineCode
+      machineName: $machineName
+      machineType: $machineType
+      gatewayCode: $gatewayCode
+      endpointType: $endpointType
+      protocol: $protocol
+    ) {
+      createdAt
+      machineCode
+      machineId
+      machineName
+      machineType
+      plantId
+      status
+    }
+  }
+`;
+
 export const INSERT_THRESHOLD_MUTATION = `
   mutation InsertThreshold($input: ThresholdInput!) {
     insertThreshold(input: $input) {

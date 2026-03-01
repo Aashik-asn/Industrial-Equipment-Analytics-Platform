@@ -57,6 +57,30 @@ export const MACHINES_QUERY = gql`
   }
 `;
 
+export const GATEWAYS_QUERY = gql`
+  query Gateways($plantId: UUID!) {
+    gateways(plantId: $plantId) {
+      gatewayId
+      plantId
+      gatewayCode
+      status
+      lastSeen
+    }
+  }
+`;
+
+export const ENDPOINTS_QUERY = gql`
+  query DeviceEndpoints($gatewayId: UUID!) {
+    deviceEndpoints(gatewayId: $gatewayId) {
+      endpointId
+      gatewayId
+      endpointType
+      protocol
+      status
+    }
+  }
+`;
+
 // Dashboard query - uses proper GraphQL types (UUID, DateTime)
 export const DASHBOARD_QUERY = gql`
   query Dashboard($plantId: UUID, $from: DateTime, $to: DateTime) {

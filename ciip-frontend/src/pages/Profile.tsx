@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useApolloClient } from '@apollo/client';
-import { TENANT_PROFILE_QUERY, PLANTS_QUERY, THRESHOLDS_QUERY, MACHINES_QUERY } from '../graphql/queries';
-import { UPDATE_PROFILE_MUTATION, CHANGE_PASSWORD_MUTATION, UPDATE_TENANT_NAME_MUTATION, UPSERT_PLANT_MUTATION, INSERT_THRESHOLD_MUTATION } from '../graphql/mutations';
+import { TENANT_PROFILE_QUERY, PLANTS_QUERY, THRESHOLDS_QUERY, MACHINES_QUERY, GATEWAYS_QUERY, ENDPOINTS_QUERY } from '../graphql/queries';
+import { UPDATE_PROFILE_MUTATION, CHANGE_PASSWORD_MUTATION, UPDATE_TENANT_NAME_MUTATION, UPSERT_PLANT_MUTATION, INSERT_THRESHOLD_MUTATION, ADD_MACHINE_MUTATION } from '../graphql/mutations';
 import dayjs from 'dayjs';
 import '../styles/profile.css';
 
@@ -13,6 +13,7 @@ const CHANGE_PASSWORD_GQL = gql`${CHANGE_PASSWORD_MUTATION}`;
 const UPDATE_TENANT_NAME_GQL = gql`${UPDATE_TENANT_NAME_MUTATION}`;
 const UPSERT_PLANT_GQL = gql`${UPSERT_PLANT_MUTATION}`;
 const INSERT_THRESHOLD_GQL = gql`${INSERT_THRESHOLD_MUTATION}`;
+const ADD_MACHINE_GQL = gql`${ADD_MACHINE_MUTATION}`;
 
 interface TenantProfile {
   createdAt: string;
@@ -29,6 +30,9 @@ const Profile = () => {
   });
 
   const profile: TenantProfile | null = data?.tenantProfile || null;
+
+  type TabType = 'overview' | 'plants' | 'thresholds';
+  const [activeTab, setActiveTab] = useState<TabType>('overview');
 
   // Global Plant Query
   const { data: plantsData, loading: plantsLoading, refetch: refetchPlants } = useQuery(PLANTS_QUERY, {
@@ -91,6 +95,7 @@ const Profile = () => {
   const [changePassword, { loading: passwordLoading }] = useMutation(CHANGE_PASSWORD_GQL);
   const [upsertPlant, { loading: plantLoading }] = useMutation(UPSERT_PLANT_GQL);
   const [insertThreshold, { loading: thresholdLoading }] = useMutation(INSERT_THRESHOLD_GQL);
+  const [addMachine, { loading: addMachineLoading }] = useMutation(ADD_MACHINE_GQL);
 
   // Local state for Plant Management form
   const [plantCodeInput, setPlantCodeInput] = useState('');
@@ -138,6 +143,137 @@ const Profile = () => {
       await client.refetchQueries({ include: 'active' }); // Refresh Sidebar
     } catch (err: any) {
       setPlantStatus({ type: 'error', msg: err.message || 'Failed to upsert plant.' });
+    }
+  };
+
+  // Local state for Add Machine Form
+  const [showAddMachineModal, setShowAddMachineModal] = useState(false);
+  const [activePlantForMachine, setActivePlantForMachine] = useState<{ plantId: string, plantName: string } | null>(null);
+
+  const [newMachineCode, setNewMachineCode] = useState('');
+  const [newMachineName, setNewMachineName] = useState('');
+  const [newMachineType, setNewMachineType] = useState('STANDARD');
+  const [customMachineType, setCustomMachineType] = useState('');
+
+  const [selectedGatewayId, setSelectedGatewayId] = useState<string>(''); // 'NEW' triggers custom input
+  const [customGatewayCode, setCustomGatewayCode] = useState('');
+
+  const [selectedEndpointId, setSelectedEndpointId] = useState<string>(''); // 'NEW' triggers custom input
+  const [newEndpointType, setNewEndpointType] = useState('ENERGY');
+  const [customEndpointType, setCustomEndpointType] = useState('');
+  const [newProtocol, setNewProtocol] = useState('MQTT');
+
+  const [addMachineStatus, setAddMachineStatus] = useState<{ type: 'success' | 'error', msg: string } | null>(null);
+
+  // Dynamic Gateway Loading
+  const [gateways, setGateways] = useState<any[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    const fetchGateways = async () => {
+      if (!activePlantForMachine?.plantId) {
+        setGateways([]);
+        return;
+      }
+      try {
+        const { data } = await client.query({
+          query: GATEWAYS_QUERY,
+          variables: { plantId: activePlantForMachine.plantId },
+          fetchPolicy: 'network-only'
+        });
+        if (active) setGateways(data?.gateways || []);
+      } catch (err) {
+        console.error('Failed to fetch gateways:', err);
+      }
+    };
+    fetchGateways();
+    return () => { active = false; };
+  }, [activePlantForMachine?.plantId, client]);
+
+  // Dynamic Endpoint Loading
+  const [endpoints, setEndpoints] = useState<any[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    const fetchEndpoints = async () => {
+      if (!selectedGatewayId || selectedGatewayId === 'NEW') {
+        setEndpoints([]);
+        return;
+      }
+      try {
+        const { data } = await client.query({
+          query: ENDPOINTS_QUERY,
+          variables: { gatewayId: selectedGatewayId },
+          fetchPolicy: 'network-only'
+        });
+        if (active) setEndpoints(data?.deviceEndpoints || []);
+      } catch (err) {
+        console.error('Failed to fetch endpoints:', err);
+      }
+    };
+    fetchEndpoints();
+    return () => { active = false; };
+  }, [selectedGatewayId, client, showAddMachineModal]);
+
+  const handleOpenAddMachine = (plant: any) => {
+    setActivePlantForMachine({ plantId: plant.plantId, plantName: plant.plantName });
+    setShowAddMachineModal(true);
+    setNewMachineCode('');
+    setNewMachineName('');
+    setNewMachineType(uniqueMachineTypes.length > 0 ? uniqueMachineTypes[0] : 'STANDARD');
+    setCustomMachineType('');
+    setSelectedGatewayId('');
+    setCustomGatewayCode('');
+    setSelectedEndpointId('');
+    setNewEndpointType('ENERGY');
+    setCustomEndpointType('');
+    setNewProtocol('MQTT');
+    setAddMachineStatus(null);
+  };
+
+  const handleAddMachineSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAddMachineStatus(null);
+
+    const finalMachineType = newMachineType === 'NEW' ? customMachineType : newMachineType;
+
+    // Resolve Gateway and Endpoint variables depending on standard dropdown or requested 'NEW' mode
+    const finalGatewayCode = selectedGatewayId === 'NEW'
+      ? customGatewayCode
+      : gateways.find(g => g.gatewayId === selectedGatewayId)?.gatewayCode;
+
+    const isNewEndpointContext = selectedEndpointId === 'NEW' || selectedGatewayId === 'NEW';
+
+    const finalEndpointType = isNewEndpointContext
+      ? (newEndpointType === 'NEW' ? customEndpointType : newEndpointType)
+      : (endpoints.find(e => e.endpointId === selectedEndpointId)?.endpointType || 'UNKNOWN');
+
+    const finalProtocol = isNewEndpointContext
+      ? newProtocol
+      : (endpoints.find(e => e.endpointId === selectedEndpointId)?.protocol || 'UNKNOWN');
+
+    if (!finalGatewayCode || !finalEndpointType || !finalMachineType || !finalProtocol) {
+      setAddMachineStatus({ type: 'error', msg: 'Missing form configuration values.' });
+      return;
+    }
+
+    try {
+      await addMachine({
+        variables: {
+          plantId: activePlantForMachine?.plantId,
+          machineCode: newMachineCode,
+          machineName: newMachineName,
+          machineType: finalMachineType,
+          gatewayCode: finalGatewayCode,
+          endpointType: finalEndpointType,
+          protocol: finalProtocol
+        }
+      });
+      setAddMachineStatus({ type: 'success', msg: 'Machine provisioned successfully.' });
+      await client.refetchQueries({ include: [MACHINES_QUERY, GATEWAYS_QUERY, ENDPOINTS_QUERY] }); // Refresh any machine table views natively and bust the backend mapping cache!
+      setTimeout(() => setShowAddMachineModal(false), 800);
+    } catch (err: any) {
+      setAddMachineStatus({ type: 'error', msg: err?.message || 'Failed to add machine via mutation.' });
     }
   };
 
@@ -369,172 +505,198 @@ const Profile = () => {
         <p className="profile-subtitle">Manage your account credentials and system preferences</p>
       </div>
 
-      <div className="profile-grid">
-        {/* Read-Only Info Card */}
-        <div className="profile-card full-width" style={{ marginBottom: '8px' }}>
-          <div className="profile-card-header">
-            <h2 className="profile-card-title">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                <circle cx="12" cy="7" r="4"></circle>
-              </svg>
-              Standard Account Info
-            </h2>
+      {/* Tabs */}
+      <div className="tabs-container">
+        <button
+          className={`tab-button ${activeTab === 'overview' ? 'active' : ''}`}
+          onClick={() => setActiveTab('overview')}
+        >
+          Overview
+        </button>
+        <button
+          className={`tab-button ${activeTab === 'plants' ? 'active' : ''}`}
+          onClick={() => setActiveTab('plants')}
+        >
+          Plant Management
+        </button>
+        <button
+          className={`tab-button ${activeTab === 'thresholds' ? 'active' : ''}`}
+          onClick={() => setActiveTab('thresholds')}
+        >
+          Threshold Configuration
+        </button>
+      </div>
+
+      {activeTab === 'overview' && (
+        <div className="profile-grid">
+          {/* Read-Only Info Card */}
+          <div className="profile-card full-width" style={{ marginBottom: '8px' }}>
+            <div className="profile-card-header">
+              <h2 className="profile-card-title">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+                Standard Account Info
+              </h2>
+            </div>
+            <div className="profile-card-content" style={{ display: 'flex', gap: '32px', flexWrap: 'wrap' }}>
+              <div className="info-row">
+                <div className="info-label">Current Role</div>
+                <div className="base-badge">{profile?.role || 'Unknown'}</div>
+              </div>
+              <div className="info-row">
+                <div className="info-label">Account Created</div>
+                <div className="info-value">
+                  {profile?.createdAt ? dayjs(profile.createdAt).format('DD MMM YYYY, HH:mm') : '-'}
+                </div>
+              </div>
+              <div className="info-row">
+                <div className="info-label">User ID</div>
+                <div className="info-value" style={{ fontFamily: 'monospace', fontSize: '14px', color: '#6b7280' }}>
+                  {profile?.userId || '-'}
+                </div>
+              </div>
+              <div className="info-row">
+                <div className="info-label">Tenant ID</div>
+                <div className="info-value" style={{ fontFamily: 'monospace', fontSize: '14px', color: '#6b7280' }}>
+                  {profile?.tenantId || '-'}
+                </div>
+              </div>
+            </div>
           </div>
-          <div className="profile-card-content" style={{ display: 'flex', gap: '32px', flexWrap: 'wrap' }}>
-            <div className="info-row">
-              <div className="info-label">Current Role</div>
-              <div className="base-badge">{profile?.role || 'Unknown'}</div>
+
+          {/* Edit Email Card */}
+          <div className="profile-card">
+            <div className="profile-card-header">
+              <h2 className="profile-card-title">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                  <polyline points="22,6 12,13 2,6"></polyline>
+                </svg>
+                Email Address
+              </h2>
             </div>
-            <div className="info-row">
-              <div className="info-label">Account Created</div>
-              <div className="info-value">
-                {profile?.createdAt ? dayjs(profile.createdAt).format('DD MMM YYYY, HH:mm') : '-'}
+            <form className="profile-card-content" onSubmit={handleEmailSubmit}>
+              <div className="form-group">
+                <label>Contact Email</label>
+                <input
+                  type="email"
+                  className="form-input"
+                  value={emailInput}
+                  onChange={(e) => setEmailInput(e.target.value)}
+                  placeholder="Enter new email address"
+                  required
+                />
               </div>
-            </div>
-            <div className="info-row">
-              <div className="info-label">User ID</div>
-              <div className="info-value" style={{ fontFamily: 'monospace', fontSize: '14px', color: '#6b7280' }}>
-                {profile?.userId || '-'}
+
+              {emailStatus && (
+                <div className={`status-message ${emailStatus.type}`}>
+                  {emailStatus.msg}
+                </div>
+              )}
+
+              <div className="profile-actions">
+                <button type="submit" className="btn-primary" disabled={emailLoading}>
+                  {emailLoading ? 'Saving...' : 'Save Email'}
+                </button>
               </div>
+            </form>
+          </div>
+
+          {/* Change Password Card */}
+          <div className="profile-card">
+            <div className="profile-card-header">
+              <h2 className="profile-card-title">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                </svg>
+                Security
+              </h2>
             </div>
-            <div className="info-row">
-              <div className="info-label">Tenant ID</div>
-              <div className="info-value" style={{ fontFamily: 'monospace', fontSize: '14px', color: '#6b7280' }}>
-                {profile?.tenantId || '-'}
+            <form className="profile-card-content" onSubmit={handlePasswordSubmit}>
+              <div className="form-group">
+                <label>New Password</label>
+                <input
+                  type="password"
+                  className="form-input"
+                  value={passwordInput}
+                  onChange={(e) => setPasswordInput(e.target.value)}
+                  placeholder="Minimum 6 characters"
+                  minLength={6}
+                  required
+                />
               </div>
+              <div className="form-group">
+                <label>Confirm Password</label>
+                <input
+                  type="password"
+                  className="form-input"
+                  value={confirmPasswordInput}
+                  onChange={(e) => setConfirmPasswordInput(e.target.value)}
+                  placeholder="Verify new password"
+                  minLength={6}
+                  required
+                />
+              </div>
+
+              {passwordStatus && (
+                <div className={`status-message ${passwordStatus.type}`}>
+                  {passwordStatus.msg}
+                </div>
+              )}
+
+              <div className="profile-actions">
+                <button type="submit" className="btn-primary" disabled={passwordLoading}>
+                  {passwordLoading ? 'Updating...' : 'Change Password'}
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Edit Tenant Name Card */}
+          <div className="profile-card full-width">
+            <div className="profile-card-header">
+              <h2 className="profile-card-title">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                  <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                </svg>
+                Organization Settings
+              </h2>
             </div>
+            <form className="profile-card-content" onSubmit={handleTenantNameSubmit}>
+              <div className="form-group" style={{ maxWidth: '400px' }}>
+                <label>Tenant Name</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={tenantNameInput}
+                  onChange={(e) => setTenantNameInput(e.target.value)}
+                  placeholder="Enter organization name"
+                  required
+                />
+              </div>
+
+              {tenantNameStatus && (
+                <div className={`status-message ${tenantNameStatus.type}`}>
+                  {tenantNameStatus.msg}
+                </div>
+              )}
+
+              <div className="profile-actions" style={{ justifyContent: 'flex-start' }}>
+                <button type="submit" className="btn-primary" disabled={tenantLoading}>
+                  {tenantLoading ? 'Saving...' : 'Update Name'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
+      )}
 
-        {/* Edit Email Card */}
-        <div className="profile-card">
-          <div className="profile-card-header">
-            <h2 className="profile-card-title">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
-                <polyline points="22,6 12,13 2,6"></polyline>
-              </svg>
-              Email Address
-            </h2>
-          </div>
-          <form className="profile-card-content" onSubmit={handleEmailSubmit}>
-            <div className="form-group">
-              <label>Contact Email</label>
-              <input
-                type="email"
-                className="form-input"
-                value={emailInput}
-                onChange={(e) => setEmailInput(e.target.value)}
-                placeholder="Enter new email address"
-                required
-              />
-            </div>
-
-            {emailStatus && (
-              <div className={`status-message ${emailStatus.type}`}>
-                {emailStatus.msg}
-              </div>
-            )}
-
-            <div className="profile-actions">
-              <button type="submit" className="btn-primary" disabled={emailLoading}>
-                {emailLoading ? 'Saving...' : 'Save Email'}
-              </button>
-            </div>
-          </form>
-        </div>
-
-        {/* Change Password Card */}
-        <div className="profile-card">
-          <div className="profile-card-header">
-            <h2 className="profile-card-title">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-              </svg>
-              Security
-            </h2>
-          </div>
-          <form className="profile-card-content" onSubmit={handlePasswordSubmit}>
-            <div className="form-group">
-              <label>New Password</label>
-              <input
-                type="password"
-                className="form-input"
-                value={passwordInput}
-                onChange={(e) => setPasswordInput(e.target.value)}
-                placeholder="Minimum 6 characters"
-                minLength={6}
-                required
-              />
-            </div>
-            <div className="form-group">
-              <label>Confirm Password</label>
-              <input
-                type="password"
-                className="form-input"
-                value={confirmPasswordInput}
-                onChange={(e) => setConfirmPasswordInput(e.target.value)}
-                placeholder="Verify new password"
-                minLength={6}
-                required
-              />
-            </div>
-
-            {passwordStatus && (
-              <div className={`status-message ${passwordStatus.type}`}>
-                {passwordStatus.msg}
-              </div>
-            )}
-
-            <div className="profile-actions">
-              <button type="submit" className="btn-primary" disabled={passwordLoading}>
-                {passwordLoading ? 'Updating...' : 'Change Password'}
-              </button>
-            </div>
-          </form>
-        </div>
-
-        {/* Edit Tenant Name Card */}
-        <div className="profile-card full-width">
-          <div className="profile-card-header">
-            <h2 className="profile-card-title">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-                <polyline points="9 22 9 12 15 12 15 22"></polyline>
-              </svg>
-              Organization Settings
-            </h2>
-          </div>
-          <form className="profile-card-content" onSubmit={handleTenantNameSubmit}>
-            <div className="form-group" style={{ maxWidth: '400px' }}>
-              <label>Tenant Name</label>
-              <input
-                type="text"
-                className="form-input"
-                value={tenantNameInput}
-                onChange={(e) => setTenantNameInput(e.target.value)}
-                placeholder="Enter organization name"
-                required
-              />
-            </div>
-
-            {tenantNameStatus && (
-              <div className={`status-message ${tenantNameStatus.type}`}>
-                {tenantNameStatus.msg}
-              </div>
-            )}
-
-            <div className="profile-actions" style={{ justifyContent: 'flex-start' }}>
-              <button type="submit" className="btn-primary" disabled={tenantLoading}>
-                {tenantLoading ? 'Saving...' : 'Update Name'}
-              </button>
-            </div>
-          </form>
-        </div>
-
-        {/* Plant Management Section */}
+      {/* Plant Management Section */}
+      {activeTab === 'plants' && (
         <div className="profile-card full-width">
           <div className="profile-card-header">
             <h2 className="profile-card-title">
@@ -642,9 +804,15 @@ const Profile = () => {
                             <td style={{ padding: '12px 16px', textAlign: 'right' }}>
                               <button
                                 onClick={() => handleEditPlant(plant)}
-                                style={{ background: 'transparent', border: 'none', color: '#3b82f6', fontWeight: 600, cursor: 'pointer', fontSize: '13px' }}
+                                style={{ background: 'transparent', border: 'none', color: '#3b82f6', fontWeight: 600, cursor: 'pointer', fontSize: '13px', marginRight: '12px' }}
                               >
                                 Edit
+                              </button>
+                              <button
+                                onClick={() => handleOpenAddMachine(plant)}
+                                style={{ background: 'transparent', border: 'none', color: '#10b981', fontWeight: 600, cursor: 'pointer', fontSize: '13px' }}
+                              >
+                                Add Machine
                               </button>
                             </td>
                           </tr>
@@ -657,8 +825,10 @@ const Profile = () => {
             </div>
           </div>
         </div>
+      )}
 
-        {/* Threshold Management Section */}
+      {/* Threshold Management Section */}
+      {activeTab === 'thresholds' && (
         <div className="profile-card full-width" style={{ marginTop: '16px' }}>
           <div className="profile-card-header">
             <h2 className="profile-card-title">
@@ -842,8 +1012,127 @@ const Profile = () => {
             </div>
           </div>
         </div>
+      )}
 
-      </div>
+      {/* Add Machine Modal Overlay */}
+      {showAddMachineModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: '#fff', padding: '32px', borderRadius: '12px', width: '500px', maxWidth: '90%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#111827' }}>Add Machine to {activePlantForMachine?.plantName}</h3>
+              <button onClick={() => setShowAddMachineModal(false)} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#6b7280' }}>&times;</button>
+            </div>
+
+            <form onSubmit={handleAddMachineSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label>Machine Code</label>
+                  <input type="text" className="form-input" value={newMachineCode} onChange={e => setNewMachineCode(e.target.value)} placeholder="e.g. M001" required />
+                </div>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label>Machine Name</label>
+                  <input type="text" className="form-input" value={newMachineName} onChange={e => setNewMachineName(e.target.value)} placeholder="e.g. Mill A" required />
+                </div>
+              </div>
+
+              <div className="form-group" style={{ margin: 0 }}>
+                <label>Machine Type</label>
+                <select className="form-input" value={newMachineType} onChange={e => setNewMachineType(e.target.value)} required>
+                  {uniqueMachineTypes.map((type: string, index: number) => (
+                    <option key={`mt-${index}`} value={type}>{type}</option>
+                  ))}
+                  {uniqueMachineTypes.length === 0 && <option value="STANDARD">STANDARD</option>}
+                  <option value="NEW" style={{ fontWeight: 'bold', color: '#8b5cf6' }}>+ Add New Machine Type</option>
+                </select>
+              </div>
+
+              {newMachineType === 'NEW' && (
+                <div className="form-group" style={{ margin: 0, paddingLeft: '16px', borderLeft: '3px solid #8b5cf6' }}>
+                  <label>New Machine Type</label>
+                  <input type="text" className="form-input" value={customMachineType} onChange={e => setCustomMachineType(e.target.value)} placeholder="e.g. ROBOT_ARM" required />
+                </div>
+              )}
+
+              <hr style={{ border: 'none', borderTop: '1px solid #e5e7eb', margin: '8px 0' }} />
+              <h4 style={{ margin: 0, fontSize: '14px', color: '#4b5563', fontWeight: 600 }}>Connection Setup</h4>
+
+              <div className="form-group" style={{ margin: 0 }}>
+                <label>Gateway</label>
+                <select className="form-input" value={selectedGatewayId} onChange={e => setSelectedGatewayId(e.target.value)} required>
+                  <option value="" disabled>Select a gateway...</option>
+                  {gateways.map(g => (
+                    <option key={g.gatewayId} value={g.gatewayId}>{g.gatewayCode} (Active)</option>
+                  ))}
+                  <option value="NEW" style={{ fontWeight: 'bold', color: '#3b82f6' }}>+ Add New Gateway</option>
+                </select>
+              </div>
+
+              {selectedGatewayId === 'NEW' && (
+                <div className="form-group" style={{ margin: 0, paddingLeft: '16px', borderLeft: '3px solid #3b82f6' }}>
+                  <label>New Gateway Code</label>
+                  <input type="text" className="form-input" value={customGatewayCode} onChange={e => setCustomGatewayCode(e.target.value)} placeholder="e.g. GW-01" required />
+                </div>
+              )}
+
+              <div className="form-group" style={{ margin: 0 }}>
+                <label>Endpoint</label>
+                <select className="form-input" value={selectedEndpointId} onChange={e => setSelectedEndpointId(e.target.value)} disabled={!selectedGatewayId || selectedGatewayId === 'NEW'} required={selectedGatewayId !== 'NEW' && !!selectedGatewayId}>
+                  <option value="" disabled>Select an endpoint...</option>
+                  {endpoints.map(e => (
+                    <option key={e.endpointId} value={e.endpointId}>{e.endpointType} ({e.protocol})</option>
+                  ))}
+                  <option value="NEW" style={{ fontWeight: 'bold', color: '#10b981' }}>+ Add New Endpoint</option>
+                </select>
+                {selectedGatewayId === 'NEW' && <small style={{ color: '#6b7280', fontSize: '12px' }}>Endpoints will be attached to the new Gateway.</small>}
+              </div>
+
+              {(selectedEndpointId === 'NEW' || selectedGatewayId === 'NEW') && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', paddingLeft: '16px', borderLeft: '3px solid #10b981' }}>
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label>Endpoint Type</label>
+                    <select className="form-input" value={newEndpointType} onChange={e => setNewEndpointType(e.target.value)} required>
+                      <option value="ENERGY">ENERGY</option>
+                      <option value="VIBRATION">VIBRATION</option>
+                      <option value="TEMPERATURE">TEMPERATURE</option>
+                      <option value="CNC_CTL">CNC_CTL</option>
+                      <option value="NEW" style={{ fontWeight: 'bold', color: '#8b5cf6' }}>+ Add Custom Type</option>
+                    </select>
+                    {newEndpointType === 'NEW' && (
+                      <input type="text" className="form-input" value={customEndpointType} onChange={e => setCustomEndpointType(e.target.value)} placeholder="e.g. CUSTOM_TYPE" style={{ marginTop: '8px' }} required />
+                    )}
+                  </div>
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label>Protocol</label>
+                    <select className="form-input" value={newProtocol} onChange={e => setNewProtocol(e.target.value)} required>
+                      <option value="MQTT">MQTT</option>
+                      <option value="MODBUS">MODBUS</option>
+                      <option value="OPC-UA">OPC-UA</option>
+                      <option value="REST">REST</option>
+                      <option value="TCP">TCP</option>
+                      <option value="UDP">UDP</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {addMachineStatus && (
+                <div className={`status-message ${addMachineStatus.type}`} style={{ margin: 0 }}>
+                  {addMachineStatus.msg}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '16px' }}>
+                <button type="button" onClick={() => setShowAddMachineModal(false)} className="btn-outline" style={{ padding: '10px 20px', borderRadius: '8px', background: 'transparent', border: '1px solid #d1d5db', cursor: 'pointer', fontWeight: 500 }}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn-primary" disabled={addMachineLoading}>
+                  {addMachineLoading ? 'Provisioning...' : 'Provision Machine'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

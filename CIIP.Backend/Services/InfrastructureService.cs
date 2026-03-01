@@ -32,9 +32,20 @@ public class InfrastructureService
         if (plant == null)
             throw new Exception("Unauthorized plant access.");
 
-        var gateway = await _db.Gateways
-            .FirstOrDefaultAsync(g => g.PlantId == plantId);
+        // ⭐ Validate machine code uniqueness
+        var existingMachine = await _db.Machines
+            .FirstOrDefaultAsync(m => m.PlantId == plantId && m.MachineCode == machineCode);
+        
+        if (existingMachine != null)
+            throw new Exception($"Machine code '{machineCode}' already exists in this plant.");
 
+        // ⭐ Find gateway by plantId + gatewayCode
+        var gateway = await _db.Gateways
+            .FirstOrDefaultAsync(g => 
+                g.PlantId == plantId && 
+                g.GatewayCode == gatewayCode);
+
+        // If not found → create gateway
         if (gateway == null)
         {
             gateway = new Gateway
@@ -49,6 +60,29 @@ public class InfrastructureService
             _db.Gateways.Add(gateway);
         }
 
+        // ⭐ Find endpoint by gatewayId + endpointType + protocol
+        var endpoint = await _db.DeviceEndpoints
+            .FirstOrDefaultAsync(e => 
+                e.GatewayId == gateway.GatewayId &&
+                e.EndpointType == endpointType &&
+                e.Protocol == protocol);
+
+        // If not found → create endpoint
+        if (endpoint == null)
+        {
+            endpoint = new DeviceEndpoint
+            {
+                EndpointId = Guid.NewGuid(),
+                GatewayId = gateway.GatewayId,
+                EndpointType = endpointType,
+                Protocol = protocol,
+                Status = "ACTIVE"
+            };
+
+            _db.DeviceEndpoints.Add(endpoint);
+        }
+
+        // Create machine
         var machine = new Machine
         {
             MachineId = Guid.NewGuid(),
@@ -61,17 +95,6 @@ public class InfrastructureService
         };
 
         _db.Machines.Add(machine);
-
-        var endpoint = new DeviceEndpoint
-        {
-            EndpointId = Guid.NewGuid(),
-            GatewayId = gateway.GatewayId,
-            EndpointType = endpointType,
-            Protocol = protocol,
-            Status = "ACTIVE"
-        };
-
-        _db.DeviceEndpoints.Add(endpoint);
 
         _db.EndpointMachineMaps.Add(new EndpointMachineMap
         {

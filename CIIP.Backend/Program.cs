@@ -77,6 +77,7 @@ builder.Services
     .AddTypeExtension<MachineDetailsQuery>()
     .AddTypeExtension<AlertQuery>()
     .AddTypeExtension<ThresholdQuery>()
+    .AddTypeExtension<InfrastructureQuery>()
     .AddFiltering()
     .AddSorting()
     .AddProjections();
