@@ -30,7 +30,8 @@ public class JwtService
             new Claim(ClaimTypes.NameIdentifier, user.UserId.ToString()),
             new Claim("tenantId", user.TenantId.ToString()),
             new Claim(ClaimTypes.Role, user.Role ?? "USER"),
-            new Claim(ClaimTypes.Email, user.Email ?? "")
+            new Claim(ClaimTypes.Email, user.Email ?? ""),
+            new Claim("userId", user.UserId.ToString())
         };
 
         var token = new JwtSecurityToken(

@@ -23,6 +23,8 @@ export const TENANT_PROFILE_QUERY = gql`
     tenantProfile {
       createdAt
       email
+      firstName
+      lastName
       passwordHash
       role
       tenantId

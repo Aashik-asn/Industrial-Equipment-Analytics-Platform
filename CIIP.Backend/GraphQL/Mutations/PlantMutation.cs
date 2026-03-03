@@ -8,7 +8,7 @@ namespace CIIP.Backend.GraphQL.Mutations;
 [ExtendObjectType(typeof(Mutation))]
 public class PlantMutation
 {
-    [Authorize]
+    [Authorize(Roles = new[] { "ADMIN" })]
     public async Task<Plant> UpsertPlant(
         ClaimsPrincipal user,
         string plantCode,

@@ -7,6 +7,7 @@ import MachineDetails from './pages/MachineDetails';
 import AlertManagement from './pages/AlertManagement';
 import PlantAlerts from './pages/PlantAlerts'; // Added Plant Alerts
 import Profile from './pages/Profile';
+import UserManagement from './pages/UserManagement';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import PublicRoute from './components/PublicRoute';
@@ -50,6 +51,7 @@ function App() {
           <Route path="alerts" element={<AlertManagement />} />
           <Route path="plant-alerts/:plantId" element={<PlantAlerts />} />
           <Route path="profile" element={<Profile />} />
+          <Route path="user-management" element={<UserManagement />} />
         </Route>
       </Routes>
     </Router>

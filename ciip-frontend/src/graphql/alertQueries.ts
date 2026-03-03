@@ -36,19 +36,18 @@ export const ACKNOWLEDGED_ALERT_QUERY = gql`
   }
 `;
 
+// technicianName removed — backend now auto-fills from the logged-in user's JWT
 export const ACKNOWLEDGE_ALERT_MUTATION = gql`
   mutation AcknowledgeAlert(
     $actionTaken: String!
     $alertId: UUID!
     $reason: String!
-    $technicianName: String!
   ) {
     acknowledgeAlert(
       input: {
         actionTaken: $actionTaken
         alertId: $alertId
         reason: $reason
-        technicianName: $technicianName
       }
     )
   }

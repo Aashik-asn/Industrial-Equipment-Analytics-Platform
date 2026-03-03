@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useApolloClient } from '@apollo/client';
 import { TENANT_PROFILE_QUERY, PLANTS_QUERY, THRESHOLDS_QUERY, MACHINES_QUERY, GATEWAYS_QUERY, ENDPOINTS_QUERY } from '../graphql/queries';
-import { UPDATE_PROFILE_MUTATION, CHANGE_PASSWORD_MUTATION, UPDATE_TENANT_NAME_MUTATION, UPSERT_PLANT_MUTATION, INSERT_THRESHOLD_MUTATION, ADD_MACHINE_MUTATION } from '../graphql/mutations';
+import { UPDATE_PROFILE_MUTATION, CHANGE_PASSWORD_MUTATION, UPDATE_TENANT_NAME_MUTATION, UPDATE_USERNAME_MUTATION, UPSERT_PLANT_MUTATION, INSERT_THRESHOLD_MUTATION, ADD_MACHINE_MUTATION } from '../graphql/mutations';
 import dayjs from 'dayjs';
 import '../styles/profile.css';
 
@@ -11,13 +11,19 @@ import { gql } from '@apollo/client';
 const UPDATE_PROFILE_GQL = gql`${UPDATE_PROFILE_MUTATION}`;
 const CHANGE_PASSWORD_GQL = gql`${CHANGE_PASSWORD_MUTATION}`;
 const UPDATE_TENANT_NAME_GQL = gql`${UPDATE_TENANT_NAME_MUTATION}`;
+const UPDATE_USERNAME_GQL = gql`${UPDATE_USERNAME_MUTATION}`;
 const UPSERT_PLANT_GQL = gql`${UPSERT_PLANT_MUTATION}`;
 const INSERT_THRESHOLD_GQL = gql`${INSERT_THRESHOLD_MUTATION}`;
 const ADD_MACHINE_GQL = gql`${ADD_MACHINE_MUTATION}`;
 
+const userRole = localStorage.getItem('role') || '';
+const isAdmin = userRole === 'ADMIN';
+
 interface TenantProfile {
   createdAt: string;
   email: string;
+  firstName: string;
+  lastName: string;
   role: string;
   tenantId: string;
   userId: string;
@@ -76,6 +82,11 @@ const Profile = () => {
 
 
 
+  // Local state for Name form
+  const [firstNameInput, setFirstNameInput] = useState('');
+  const [lastNameInput, setLastNameInput] = useState('');
+  const [nameStatus, setNameStatus] = useState<{ type: 'success' | 'error', msg: string } | null>(null);
+
   // Local state for Email form
   const [emailInput, setEmailInput] = useState('');
   const [emailStatus, setEmailStatus] = useState<{ type: 'success' | 'error', msg: string } | null>(null);
@@ -92,6 +103,7 @@ const Profile = () => {
   // Mutations
   const [updateProfile, { loading: emailLoading }] = useMutation(UPDATE_PROFILE_GQL);
   const [updateTenantName, { loading: tenantLoading }] = useMutation(UPDATE_TENANT_NAME_GQL);
+  const [updateUserName, { loading: nameLoading }] = useMutation(UPDATE_USERNAME_GQL);
   const [changePassword, { loading: passwordLoading }] = useMutation(CHANGE_PASSWORD_GQL);
   const [upsertPlant, { loading: plantLoading }] = useMutation(UPSERT_PLANT_GQL);
   const [insertThreshold, { loading: thresholdLoading }] = useMutation(INSERT_THRESHOLD_GQL);
@@ -407,8 +419,30 @@ const Profile = () => {
   useEffect(() => {
     if (profile) {
       setEmailInput(profile.email);
+      setFirstNameInput(profile.firstName || '');
+      setLastNameInput(profile.lastName || '');
     }
   }, [profile]);
+
+  const handleNameSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setNameStatus(null);
+
+    if (!firstNameInput.trim() || !lastNameInput.trim()) {
+      setNameStatus({ type: 'error', msg: 'First name and last name are required.' });
+      return;
+    }
+
+    try {
+      await updateUserName({ variables: { firstName: firstNameInput, lastName: lastNameInput } });
+      localStorage.setItem('firstName', firstNameInput);
+      localStorage.setItem('lastName', lastNameInput);
+      setNameStatus({ type: 'success', msg: 'Name updated successfully.' });
+      await refetch();
+    } catch (err: any) {
+      setNameStatus({ type: 'error', msg: err.message || 'Failed to update name.' });
+    }
+  };
 
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -566,6 +600,55 @@ const Profile = () => {
             </div>
           </div>
 
+          {/* Edit Username (First Name / Last Name) Card */}
+          <div className="profile-card">
+            <div className="profile-card-header">
+              <h2 className="profile-card-title">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+                Display Name
+              </h2>
+            </div>
+            <form className="profile-card-content" onSubmit={handleNameSubmit}>
+              <div className="form-group">
+                <label>First Name</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={firstNameInput}
+                  onChange={(e) => setFirstNameInput(e.target.value)}
+                  placeholder="Enter first name"
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label>Last Name</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={lastNameInput}
+                  onChange={(e) => setLastNameInput(e.target.value)}
+                  placeholder="Enter last name"
+                  required
+                />
+              </div>
+
+              {nameStatus && (
+                <div className={`status-message ${nameStatus.type}`}>
+                  {nameStatus.msg}
+                </div>
+              )}
+
+              <div className="profile-actions">
+                <button type="submit" className="btn-primary" disabled={nameLoading}>
+                  {nameLoading ? 'Saving...' : 'Save Name'}
+                </button>
+              </div>
+            </form>
+          </div>
+
           {/* Edit Email Card */}
           <div className="profile-card">
             <div className="profile-card-header">
@@ -673,10 +756,17 @@ const Profile = () => {
                   type="text"
                   className="form-input"
                   value={tenantNameInput}
-                  onChange={(e) => setTenantNameInput(e.target.value)}
+                  onChange={(e) => isAdmin && setTenantNameInput(e.target.value)}
                   placeholder="Enter organization name"
+                  readOnly={!isAdmin}
+                  style={!isAdmin ? { background: '#f3f4f6', cursor: 'not-allowed', color: '#6b7280' } : {}}
                   required
                 />
+                {!isAdmin && (
+                  <small style={{ color: '#9ca3af', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                    Only ADMIN can update the organization name.
+                  </small>
+                )}
               </div>
 
               {tenantNameStatus && (
@@ -685,11 +775,13 @@ const Profile = () => {
                 </div>
               )}
 
-              <div className="profile-actions" style={{ justifyContent: 'flex-start' }}>
-                <button type="submit" className="btn-primary" disabled={tenantLoading}>
-                  {tenantLoading ? 'Saving...' : 'Update Name'}
-                </button>
-              </div>
+              {isAdmin && (
+                <div className="profile-actions" style={{ justifyContent: 'flex-start' }}>
+                  <button type="submit" className="btn-primary" disabled={tenantLoading}>
+                    {tenantLoading ? 'Saving...' : 'Update Name'}
+                  </button>
+                </div>
+              )}
             </form>
           </div>
         </div>
@@ -711,69 +803,71 @@ const Profile = () => {
             {/* Split View for Add Form and List */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '40px' }} className="plant-admin-grid">
 
-              {/* Form Side */}
-              <div className="plant-form-section">
-                <h3 style={{ fontSize: '16px', fontWeight: 600, margin: '0 0 16px 0', color: '#374151' }}>
-                  {isEditingPlant ? 'Edit Plant' : 'Add New Plant'}
-                </h3>
-                <form onSubmit={handlePlantSubmit} style={{ background: '#f9fafb', padding: '20px', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
-                  <div className="form-group">
-                    <label>Plant Code</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      value={plantCodeInput}
-                      onChange={(e) => setPlantCodeInput(e.target.value)}
-                      placeholder="e.g., P001"
-                      disabled={isEditingPlant}
-                      required
-                      style={isEditingPlant ? { background: '#f3f4f6', cursor: 'not-allowed', color: '#6b7280' } : {}}
-                    />
-                    <small style={{ display: 'block', color: '#6b7280', fontSize: '12px', marginTop: '4px' }}>
-                      {isEditingPlant ? "Plant code cannot be changed after creation." : "Used for internal routing."}
-                    </small>
-                  </div>
-                  <div className="form-group">
-                    <label>Plant Name</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      value={plantNameInput}
-                      onChange={(e) => setPlantNameInput(e.target.value)}
-                      placeholder="e.g., Detroit Assembly"
-                      required
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Location (City)</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      value={plantCityInput}
-                      onChange={(e) => setPlantCityInput(e.target.value)}
-                      placeholder="e.g., Detroit"
-                      required
-                    />
-                  </div>
-
-                  {plantStatus && (
-                    <div className={`status-message ${plantStatus.type}`}>
-                      {plantStatus.msg}
+              {/* Form Side - ADMIN only */}
+              {isAdmin && (
+                <div className="plant-form-section">
+                  <h3 style={{ fontSize: '16px', fontWeight: 600, margin: '0 0 16px 0', color: '#374151' }}>
+                    {isEditingPlant ? 'Edit Plant' : 'Add New Plant'}
+                  </h3>
+                  <form onSubmit={handlePlantSubmit} style={{ background: '#f9fafb', padding: '20px', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
+                    <div className="form-group">
+                      <label>Plant Code</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        value={plantCodeInput}
+                        onChange={(e) => setPlantCodeInput(e.target.value)}
+                        placeholder="e.g., P001"
+                        disabled={isEditingPlant}
+                        required
+                        style={isEditingPlant ? { background: '#f3f4f6', cursor: 'not-allowed', color: '#6b7280' } : {}}
+                      />
+                      <small style={{ display: 'block', color: '#6b7280', fontSize: '12px', marginTop: '4px' }}>
+                        {isEditingPlant ? "Plant code cannot be changed after creation." : "Used for internal routing."}
+                      </small>
                     </div>
-                  )}
+                    <div className="form-group">
+                      <label>Plant Name</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        value={plantNameInput}
+                        onChange={(e) => setPlantNameInput(e.target.value)}
+                        placeholder="e.g., Detroit Assembly"
+                        required
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Location (City)</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        value={plantCityInput}
+                        onChange={(e) => setPlantCityInput(e.target.value)}
+                        placeholder="e.g., Detroit"
+                        required
+                      />
+                    </div>
 
-                  <div className="profile-actions" style={{ marginTop: '16px', paddingTop: '16px', justifyContent: 'flex-start', gap: '12px' }}>
-                    <button type="submit" className="btn-primary" disabled={plantLoading}>
-                      {plantLoading ? 'Saving...' : 'Save Plant'}
-                    </button>
-                    {(plantCodeInput || plantNameInput || plantCityInput) && (
-                      <button type="button" onClick={handleClearPlantForm} className="btn-outline" style={{ padding: '10px 20px', borderRadius: '8px', background: 'transparent', border: '1px solid #d1d5db', cursor: 'pointer', fontWeight: 500 }}>
-                        Clear
-                      </button>
+                    {plantStatus && (
+                      <div className={`status-message ${plantStatus.type}`}>
+                        {plantStatus.msg}
+                      </div>
                     )}
-                  </div>
-                </form>
-              </div>
+
+                    <div className="profile-actions" style={{ marginTop: '16px', paddingTop: '16px', justifyContent: 'flex-start', gap: '12px' }}>
+                      <button type="submit" className="btn-primary" disabled={plantLoading}>
+                        {plantLoading ? 'Saving...' : 'Save Plant'}
+                      </button>
+                      {(plantCodeInput || plantNameInput || plantCityInput) && (
+                        <button type="button" onClick={handleClearPlantForm} className="btn-outline" style={{ padding: '10px 20px', borderRadius: '8px', background: 'transparent', border: '1px solid #d1d5db', cursor: 'pointer', fontWeight: 500 }}>
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                  </form>
+                </div>
+              )}
 
               {/* List Side */}
               <div className="plant-list-section">
@@ -801,20 +895,22 @@ const Profile = () => {
                             <td style={{ padding: '12px 16px', fontSize: '14px', color: '#111827', fontWeight: 500 }}>{plant.plantCode}</td>
                             <td style={{ padding: '12px 16px', fontSize: '14px', color: '#374151' }}>{plant.plantName}</td>
                             <td style={{ padding: '12px 16px', fontSize: '14px', color: '#6b7280' }}>{plant.city || '-'}</td>
-                            <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                              <button
-                                onClick={() => handleEditPlant(plant)}
-                                style={{ background: 'transparent', border: 'none', color: '#3b82f6', fontWeight: 600, cursor: 'pointer', fontSize: '13px', marginRight: '12px' }}
-                              >
-                                Edit
-                              </button>
-                              <button
-                                onClick={() => handleOpenAddMachine(plant)}
-                                style={{ background: 'transparent', border: 'none', color: '#10b981', fontWeight: 600, cursor: 'pointer', fontSize: '13px' }}
-                              >
-                                Add Machine
-                              </button>
-                            </td>
+                            {isAdmin && (
+                              <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                                <button
+                                  onClick={() => handleEditPlant(plant)}
+                                  style={{ background: 'transparent', border: 'none', color: '#3b82f6', fontWeight: 600, cursor: 'pointer', fontSize: '13px', marginRight: '12px' }}
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  onClick={() => handleOpenAddMachine(plant)}
+                                  style={{ background: 'transparent', border: 'none', color: '#10b981', fontWeight: 600, cursor: 'pointer', fontSize: '13px' }}
+                                >
+                                  Add Machine
+                                </button>
+                              </td>
+                            )}
                           </tr>
                         ))}
                       </tbody>
@@ -842,91 +938,99 @@ const Profile = () => {
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '40px' }} className="plant-admin-grid">
 
-              {/* Form Side */}
-              <div className="threshold-form-section">
-                <h3 style={{ fontSize: '16px', fontWeight: 600, margin: '0 0 16px 0', color: '#374151' }}>
-                  {machineTypeInput !== '' ? 'Edit Threshold' : 'Add New Threshold'}
-                </h3>
-                <form onSubmit={handleThresholdSubmit} style={{ background: '#f9fafb', padding: '20px', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
-                  <div className="form-group">
-                    <label>Machine Type</label>
-                    <select
-                      className="form-input"
-                      value={machineTypeInput}
-                      onChange={(e) => setMachineTypeInput(e.target.value)}
-                      required
-                    >
-                      <option value="" disabled>Select a valid machine type...</option>
-                      {uniqueMachineTypes.map((type: any, index: number) => (
-                        <option key={index} value={type}>{type}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label>Parameter</label>
-                    <select
-                      className="form-input"
-                      value={parameterInput}
-                      onChange={(e) => setParameterInput(e.target.value)}
-                      required
-                    >
-                      <option value="" disabled>Select metric parameter...</option>
-                      <option value="Temperature">Temperature</option>
-                      <option value="Vibration">Vibration</option>
-                      <option value="Current">Current</option>
-                      <option value="RPM_HIGH">RPM High</option>
-                      <option value="RPM_LOW">RPM Low</option>
-                      <option value="LOAD_HIGH">Load High</option>
-                      <option value="LOAD_LOW">Load Low</option>
-                    </select>
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              {/* Form Side - ADMIN only */}
+              {isAdmin ? (
+                <div className="threshold-form-section">
+                  <h3 style={{ fontSize: '16px', fontWeight: 600, margin: '0 0 16px 0', color: '#374151' }}>
+                    {machineTypeInput !== '' ? 'Edit Threshold' : 'Add New Threshold'}
+                  </h3>
+                  <form onSubmit={handleThresholdSubmit} style={{ background: '#f9fafb', padding: '20px', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
                     <div className="form-group">
-                      <label>Warning Trigger</label>
-                      <input
-                        type="number"
-                        step="any"
+                      <label>Machine Type</label>
+                      <select
                         className="form-input"
-                        value={warningInput}
-                        onChange={(e) => setWarningInput(e.target.value === '' ? '' : Number(e.target.value))}
-                        placeholder="e.g., 75"
+                        value={machineTypeInput}
+                        onChange={(e) => setMachineTypeInput(e.target.value)}
                         required
-                        style={{ borderLeft: '4px solid #f59e0b' }}
-                      />
+                      >
+                        <option value="" disabled>Select a valid machine type...</option>
+                        {uniqueMachineTypes.map((type: any, index: number) => (
+                          <option key={index} value={type}>{type}</option>
+                        ))}
+                      </select>
                     </div>
                     <div className="form-group">
-                      <label>Critical Trigger</label>
-                      <input
-                        type="number"
-                        step="any"
+                      <label>Parameter</label>
+                      <select
                         className="form-input"
-                        value={criticalInput}
-                        onChange={(e) => setCriticalInput(e.target.value === '' ? '' : Number(e.target.value))}
-                        placeholder="e.g., 90"
+                        value={parameterInput}
+                        onChange={(e) => setParameterInput(e.target.value)}
                         required
-                        style={{ borderLeft: '4px solid #ef4444' }}
-                      />
+                      >
+                        <option value="" disabled>Select metric parameter...</option>
+                        <option value="Temperature">Temperature</option>
+                        <option value="Vibration">Vibration</option>
+                        <option value="Current">Current</option>
+                        <option value="RPM_HIGH">RPM High</option>
+                        <option value="RPM_LOW">RPM Low</option>
+                        <option value="LOAD_HIGH">Load High</option>
+                        <option value="LOAD_LOW">Load Low</option>
+                      </select>
                     </div>
-                  </div>
-
-                  {thresholdStatus && (
-                    <div className={`status-message ${thresholdStatus.type}`}>
-                      {thresholdStatus.msg}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                      <div className="form-group">
+                        <label>Warning Trigger</label>
+                        <input
+                          type="number"
+                          step="any"
+                          className="form-input"
+                          value={warningInput}
+                          onChange={(e) => setWarningInput(e.target.value === '' ? '' : Number(e.target.value))}
+                          placeholder="e.g., 75"
+                          required
+                          style={{ borderLeft: '4px solid #f59e0b' }}
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>Critical Trigger</label>
+                        <input
+                          type="number"
+                          step="any"
+                          className="form-input"
+                          value={criticalInput}
+                          onChange={(e) => setCriticalInput(e.target.value === '' ? '' : Number(e.target.value))}
+                          placeholder="e.g., 90"
+                          required
+                          style={{ borderLeft: '4px solid #ef4444' }}
+                        />
+                      </div>
                     </div>
-                  )}
 
-                  <div className="profile-actions" style={{ marginTop: '16px', paddingTop: '16px', justifyContent: 'flex-start', gap: '12px' }}>
-                    <button type="submit" className="btn-primary" disabled={thresholdLoading}>
-                      {thresholdLoading ? 'Saving...' : 'Save Threshold'}
-                    </button>
-                    {(machineTypeInput || parameterInput || warningInput !== '' || criticalInput !== '') && (
-                      <button type="button" onClick={handleClearThresholdForm} className="btn-outline" style={{ padding: '10px 20px', borderRadius: '8px', background: 'transparent', border: '1px solid #d1d5db', cursor: 'pointer', fontWeight: 500 }}>
-                        Clear
-                      </button>
+                    {thresholdStatus && (
+                      <div className={`status-message ${thresholdStatus.type}`}>
+                        {thresholdStatus.msg}
+                      </div>
                     )}
-                  </div>
-                </form>
-              </div>
+
+                    <div className="profile-actions" style={{ marginTop: '16px', paddingTop: '16px', justifyContent: 'flex-start', gap: '12px' }}>
+                      <button type="submit" className="btn-primary" disabled={thresholdLoading}>
+                        {thresholdLoading ? 'Saving...' : 'Save Threshold'}
+                      </button>
+                      {(machineTypeInput || parameterInput || warningInput !== '' || criticalInput !== '') && (
+                        <button type="button" onClick={handleClearThresholdForm} className="btn-outline" style={{ padding: '10px 20px', borderRadius: '8px', background: 'transparent', border: '1px solid #d1d5db', cursor: 'pointer', fontWeight: 500 }}>
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                  </form>
+                </div>
+
+              ) : (
+                <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '20px', color: '#6b7280', fontSize: '14px' }}>
+                  <strong style={{ color: '#374151' }}>ℹ️ View Only</strong>
+                  <p style={{ margin: '8px 0 0 0' }}>Only ADMIN users can configure alert thresholds. Contact your administrator to make changes.</p>
+                </div>
+              )}
 
               {/* List Side */}
               <div className="threshold-list-section">

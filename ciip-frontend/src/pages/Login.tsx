@@ -24,6 +24,8 @@ const Login = () => {
         localStorage.setItem('tenantName', data.login.tenantName);
         localStorage.setItem('role', data.login.role);
         localStorage.setItem('userId', data.login.userId);
+        localStorage.setItem('firstName', data.login.firstName || '');
+        localStorage.setItem('lastName', data.login.lastName || '');
         navigate('/dashboard');
       } else {
         setError('Invalid credentials');

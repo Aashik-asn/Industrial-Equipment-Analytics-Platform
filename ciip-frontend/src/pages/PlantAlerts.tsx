@@ -57,7 +57,6 @@ interface AcknowledgeModalProps {
 }
 
 const AcknowledgeAlertModal: React.FC<AcknowledgeModalProps> = ({ isOpen, onClose, alert, onSuccess }) => {
-    const [technicianName, setTechnicianName] = useState('');
     const [reason, setReason] = useState('');
     const [actionTaken, setActionTaken] = useState('');
 
@@ -66,7 +65,6 @@ const AcknowledgeAlertModal: React.FC<AcknowledgeModalProps> = ({ isOpen, onClos
             onSuccess();
             onClose();
             // Reset form
-            setTechnicianName('');
             setReason('');
             setActionTaken('');
         },
@@ -86,14 +84,13 @@ const AcknowledgeAlertModal: React.FC<AcknowledgeModalProps> = ({ isOpen, onClos
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!technicianName.trim() || !reason.trim() || !actionTaken.trim()) return;
+        if (!reason.trim() || !actionTaken.trim()) return;
 
         acknowledgeAlert({
             variables: {
                 actionTaken,
-                alertId: alert.alertId, // String UUID
+                alertId: alert.alertId,
                 reason,
-                technicianName
             }
         });
     };
@@ -114,16 +111,6 @@ const AcknowledgeAlertModal: React.FC<AcknowledgeModalProps> = ({ isOpen, onClos
 
                 {alert.status.toUpperCase() === 'PENDING' ? (
                     <form onSubmit={handleSubmit} className="modal-form">
-                        <div className="form-group">
-                            <label>Technician Name</label>
-                            <input
-                                type="text"
-                                placeholder="Enter your name"
-                                value={technicianName}
-                                onChange={(e) => setTechnicianName(e.target.value)}
-                                required
-                            />
-                        </div>
                         <div className="form-group">
                             <label>Reason for Alert</label>
                             <textarea
@@ -187,6 +174,8 @@ const AcknowledgeAlertModal: React.FC<AcknowledgeModalProps> = ({ isOpen, onClos
 // --- Main Page Component ---
 const PlantAlerts: React.FC = () => {
     const { plantId } = useParams();
+    const userRole = localStorage.getItem('role') || '';
+    const canAcknowledge = userRole === 'ADMIN' || userRole === 'TECHNICIAN';
 
     const [severityFilter, setSeverityFilter] = useState<string | null>(null);
     const [statusFilter, setStatusFilter] = useState<string | null>('PENDING');
@@ -427,9 +416,13 @@ const PlantAlerts: React.FC = () => {
                                         </td>
                                         <td>
                                             {alert.status.toUpperCase() === 'PENDING' ? (
-                                                <button className="action-btn pending" onClick={() => handleOpenModal(alert)}>
-                                                    Acknowledge
-                                                </button>
+                                                canAcknowledge ? (
+                                                    <button className="action-btn pending" onClick={() => handleOpenModal(alert)}>
+                                                        Acknowledge
+                                                    </button>
+                                                ) : (
+                                                    <span style={{ fontSize: '12px', color: '#9ca3af', fontStyle: 'italic' }}>View Only</span>
+                                                )
                                             ) : (
                                                 <button className="action-btn acknowledged" onClick={() => handleOpenModal(alert)}>
                                                     View Details

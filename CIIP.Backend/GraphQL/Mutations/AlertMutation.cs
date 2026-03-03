@@ -8,16 +8,20 @@ namespace CIIP.Backend.GraphQL.Mutations;
 [ExtendObjectType(typeof(Mutation))]
 public class AlertMutation
 {
-    [Authorize]
+    [Authorize(Roles = new[] { "ADMIN", "TECHNICIAN" })]
     public Task<bool> AcknowledgeAlert(
-        ClaimsPrincipal user,
-        [Service] AlertService service,
-        AcknowledgementDto input)
+    ClaimsPrincipal user,
+    [Service] AlertService service,
+    AcknowledgementDto input)
     {
         var tenantId = Guid.Parse(
             user.FindFirst("tenantId")!.Value
         );
 
-        return service.Acknowledge(input, tenantId); // ⭐ add tenant validation
+        var userId = Guid.Parse(
+            user.FindFirst("userId")!.Value
+        );
+
+        return service.Acknowledge(input, tenantId, userId);
     }
 }

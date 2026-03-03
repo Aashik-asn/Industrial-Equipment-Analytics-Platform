@@ -9,6 +9,8 @@ public class AlertAcknowledgement
     [Key]
     [Column("acknowledgement_id")]
     public Guid AcknowledgementId { get; set; }
+    [Column("user_id")]
+    public Guid UserId { get; set; }
 
     [Column("alert_id")]
     public Guid AlertId { get; set; }
@@ -26,5 +28,6 @@ public class AlertAcknowledgement
     public DateTime AcknowledgedAt { get; set; }
 
     // Navigation
+    public UserAccount User { get; set; }
     public AlertEvent? AlertEvent { get; set; }
 }

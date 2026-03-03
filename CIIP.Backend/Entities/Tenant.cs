@@ -13,12 +13,6 @@ public class Tenant
     [Column("tenant_name")]
     public string? TenantName { get; set; }
 
-    [Column("email")]
-    public string? Email { get; set; }
-
-    [Column("password_hash")]
-    public string? PasswordHash { get; set; }
-
     [Column("status")]
     public string? Status { get; set; }
 

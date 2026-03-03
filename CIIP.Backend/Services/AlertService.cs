@@ -135,6 +135,8 @@ public class AlertService
                 on ae.MachineId equals m.MachineId
             join p in _db.Plants
                 on m.PlantId equals p.PlantId
+            join u in _db.UserAccounts
+                on aa.UserId equals u.UserId
             where ae.AlertId == alertId
                   && p.TenantId == tenantId
             select new AcknowledgedAlertDto
@@ -143,7 +145,7 @@ public class AlertService
                 Parameter = ae.Parameter,
                 PlantName = p.PlantName,
                 MachineCode = m.MachineCode,
-                TechnicianName = aa.TechnicianName,
+                TechnicianName = u.FirstName + " " + u.LastName,
                 Reason = aa.Reason,
                 ActionTaken = aa.ActionTaken,
                 AcknowledgedAt = aa.AcknowledgedAt
@@ -157,7 +159,8 @@ public class AlertService
     // ======================================================
     public async Task<bool> Acknowledge(
     AcknowledgementDto dto,
-    Guid tenantId)
+    Guid tenantId,
+    Guid userId)
     {
         var exists = await _db.AlertAcknowledgements
             .AnyAsync(x => x.AlertId == dto.AlertId);
@@ -165,7 +168,7 @@ public class AlertService
         if (exists)
             throw new Exception("Alert already acknowledged.");
 
-        // ⭐ Validate tenant ownership
+        // Validate tenant ownership
         var alert = await _db.AlertEvents
             .Include(a => a.Machine!)
             .ThenInclude(m => m.Plant!)
@@ -176,11 +179,23 @@ public class AlertService
         if (alert == null)
             throw new Exception("Unauthorized alert access.");
 
+        // 🔥 Fetch logged-in user
+        var user = await _db.UserAccounts
+            .FirstOrDefaultAsync(u =>
+                u.UserId == userId &&
+                u.TenantId == tenantId);
+
+        if (user == null)
+            throw new Exception("User not found.");
+
+        var technicianName = user.FirstName + " " + user.LastName;
+
         var ack = new AlertAcknowledgement
         {
             AcknowledgementId = Guid.NewGuid(),
             AlertId = dto.AlertId,
-            TechnicianName = dto.TechnicianName,
+            UserId = userId,                     // 🔥 Store identity
+            TechnicianName = technicianName,     // Optional (can remove later)
             Reason = dto.Reason,
             ActionTaken = dto.ActionTaken,
             AcknowledgedAt = DateTime.UtcNow

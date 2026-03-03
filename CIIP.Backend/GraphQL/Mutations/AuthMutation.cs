@@ -1,6 +1,8 @@
 ﻿using CIIP.Backend.Entities;
 using CIIP.Backend.DTOs;
 using CIIP.Backend.Services;
+using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
 
 namespace CIIP.Backend.GraphQL.Mutations;
 
@@ -11,12 +13,19 @@ public class AuthMutation
     // REGISTER TENANT (NO CHANGE)
     // ======================================================
     public async Task<Tenant> RegisterTenant(
-        string tenantName,
-        string email,
-        string password,
-        [Service] AuthService service)
+    string tenantName,
+    string firstName,
+    string lastName,
+    string email,
+    string password,
+    [Service] AuthService service)
     {
-        return await service.Register(tenantName, email, password);
+        return await service.Register(
+            tenantName,
+            firstName,
+            lastName,
+            email,
+            password);
     }
 
     // ======================================================
@@ -41,7 +50,38 @@ public class AuthMutation
             UserId = user.UserId,
             TenantId = user.TenantId,
             Role = user.Role ?? "USER",
-            TenantName = user.Tenant?.TenantName ?? ""   // ✅ Added
+            TenantName = user.Tenant?.TenantName ?? "",
+            FirstName = user.FirstName,
+            LastName = user.LastName
         };
+    }
+    [Authorize(Roles = "ADMIN")]
+    public async Task<bool> CreateUser(
+    CreateUserInput input,
+    ClaimsPrincipal claims,
+    [Service] AuthService service)
+    {
+        var tenantId = Guid.Parse(claims.FindFirst("tenantId")!.Value);
+
+        await service.CreateUser(tenantId, input);
+
+        return true;
+    }
+    [Authorize]
+    public async Task<bool> UpdateUserName(
+    UpdateUserNameInput input,
+    ClaimsPrincipal claims,
+    [Service] AuthService service)
+    {
+        var userIdClaim = claims.FindFirst("userId");
+
+        if (userIdClaim == null)
+            throw new Exception("Invalid token: userId claim missing");
+
+        var userId = Guid.Parse(userIdClaim.Value);
+
+        await service.UpdateUserName(userId, input);
+
+        return true;
     }
 }

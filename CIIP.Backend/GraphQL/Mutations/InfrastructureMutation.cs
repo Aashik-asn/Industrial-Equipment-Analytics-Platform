@@ -8,7 +8,7 @@ namespace CIIP.Backend.GraphQL.Mutations;
 [ExtendObjectType(typeof(Mutation))]
 public class InfrastructureMutation
 {
-    [Authorize]
+    [Authorize(Roles = new[] { "ADMIN" })]
     public async Task<Machine> AddMachine(
         ClaimsPrincipal user,
         Guid plantId,

@@ -5,6 +5,8 @@ import logo from '../assets/logo.png';
 
 const Register = () => {
   const [tenantName, setTenantName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -18,7 +20,7 @@ const Register = () => {
     setLoading(true);
 
     try {
-      const data = await registerTenant(tenantName, email, password);
+      const data = await registerTenant(tenantName, firstName, lastName, email, password);
       console.log('Register response:', data);
       // Check if we got a valid tenant response (has tenantId)
       if (data?.registerTenant?.tenantId) {
@@ -53,7 +55,7 @@ const Register = () => {
             <h2>Create Account</h2>
             <form onSubmit={handleSubmit}>
               <div className="form-group">
-                <label htmlFor="tenantName">Tenant Name</label>
+                <label htmlFor="tenantName">Company / Organization Name</label>
                 <input
                   type="text"
                   id="tenantName"
@@ -62,6 +64,30 @@ const Register = () => {
                   placeholder="Enter your company name"
                   required
                 />
+              </div>
+              <div className="form-group" style={{ display: 'flex', gap: '12px' }}>
+                <div style={{ flex: 1 }}>
+                  <label htmlFor="firstName">First Name</label>
+                  <input
+                    type="text"
+                    id="firstName"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    placeholder="First name"
+                    required
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label htmlFor="lastName">Last Name</label>
+                  <input
+                    type="text"
+                    id="lastName"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    placeholder="Last name"
+                    required
+                  />
+                </div>
               </div>
               <div className="form-group">
                 <label htmlFor="email">Email</label>

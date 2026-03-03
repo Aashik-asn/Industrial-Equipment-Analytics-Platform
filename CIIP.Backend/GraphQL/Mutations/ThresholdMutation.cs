@@ -9,7 +9,7 @@ namespace CIIP.Backend.GraphQL.Mutations;
 [ExtendObjectType(typeof(Mutation))]
 public class ThresholdMutation
 {
-    [Authorize]
+    [Authorize(Roles = new[] { "ADMIN" })]
     public async Task<ThresholdDto> InsertThreshold(
         ClaimsPrincipal user,
         ThresholdInput input,

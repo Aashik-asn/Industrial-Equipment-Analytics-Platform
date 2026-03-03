@@ -69,7 +69,7 @@ public class ProfileMutation
     // UPDATE TENANT NAME
     // ======================================================
 
-    [Authorize]
+    [Authorize(Roles = new[] { "ADMIN" })]
     public async Task<Tenant?> UpdateTenantName(
         ClaimsPrincipal user,
         string tenantName,

@@ -19,12 +19,20 @@ const Sidebar = () => {
   const { data: plantsData } = useQuery(PLANTS_QUERY);
   const plants: Plant[] = plantsData?.plants || [];
 
+  const firstName = localStorage.getItem('firstName') || '';
+  const lastName = localStorage.getItem('lastName') || '';
+  const role = localStorage.getItem('role') || '';
+  const fullName = (firstName || lastName) ? `${firstName} ${lastName}`.trim() : 'User';
+  const isAdmin = role === 'ADMIN';
+
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('tenantId');
     localStorage.removeItem('tenantName');
     localStorage.removeItem('role');
     localStorage.removeItem('userId');
+    localStorage.removeItem('firstName');
+    localStorage.removeItem('lastName');
     navigate('/login');
   };
 
@@ -123,6 +131,21 @@ const Sidebar = () => {
             </ul>
           </li>
 
+          {/* User Management - ADMIN only */}
+          {isAdmin && (
+            <li className="nav-item">
+              <NavLink
+                to="/user-management"
+                className={({ isActive }) =>
+                  isActive ? 'nav-link active' : 'nav-link'
+                }
+              >
+                <span className="nav-icon">{getIcon('users')}</span>
+                <span className="nav-label">User Management</span>
+              </NavLink>
+            </li>
+          )}
+
           {/* Profile */}
           <li className="nav-item">
             <NavLink
@@ -139,6 +162,40 @@ const Sidebar = () => {
       </nav>
 
       <div className="sidebar-footer">
+        {/* User info display */}
+        <div style={{
+          padding: '12px 16px',
+          borderTop: '1px solid rgba(255,255,255,0.1)',
+          marginBottom: '4px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px'
+        }}>
+          <div style={{
+            width: '34px',
+            height: '34px',
+            borderRadius: '50%',
+            background: 'rgba(255,255,255,0.15)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontWeight: 700,
+            fontSize: '14px',
+            color: '#fff',
+            flexShrink: 0,
+          }}>
+            {(firstName[0] || '?').toUpperCase()}
+          </div>
+          <div style={{ overflow: 'hidden' }}>
+            <div style={{ fontWeight: 600, fontSize: '13px', color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {fullName}
+            </div>
+            <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              {role || 'User'}
+            </div>
+          </div>
+        </div>
+
         <button className="logout-button" onClick={handleLogout}>
           <span className="nav-icon">{getIcon('logout')}</span>
           <span>Logout</span>
@@ -174,6 +231,14 @@ const getIcon = (name: string) => {
         <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
         <line x1="12" y1="9" x2="12" y2="13"></line>
         <line x1="12" y1="17" x2="12.01" y2="17"></line>
+      </svg>
+    ),
+    users: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+        <circle cx="9" cy="7" r="4"></circle>
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+        <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
       </svg>
     ),
     profile: (

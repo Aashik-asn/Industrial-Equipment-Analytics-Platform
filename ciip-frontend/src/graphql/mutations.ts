@@ -42,17 +42,19 @@ export const LOGIN_MUTATION = `
       tenantId
       tenantName
       role
+      firstName
+      lastName
+      fullName
     }
   }
 `;
 
 
 export const REGISTER_TENANT_MUTATION = `
-  mutation RegisterTenant($tenantName: String!, $email: String!, $password: String!) {
-    registerTenant(tenantName: $tenantName, email: $email, password: $password) {
+  mutation RegisterTenant($tenantName: String!, $firstName: String!, $lastName: String!, $email: String!, $password: String!) {
+    registerTenant(tenantName: $tenantName, firstName: $firstName, lastName: $lastName, email: $email, password: $password) {
       tenantId
       tenantName
-      email
       status
       createdAt
     }
@@ -79,12 +81,22 @@ export const UPDATE_PROFILE_MUTATION = `
   }
 `;
 
+export const UPDATE_USERNAME_MUTATION = `
+  mutation UpdateUserName($firstName: String!, $lastName: String!) {
+    updateUserName(input: { firstName: $firstName, lastName: $lastName })
+  }
+`;
+
+export const CREATE_USER_MUTATION = `
+  mutation CreateUser($email: String!, $firstName: String!, $lastName: String!, $password: String!, $role: String!) {
+    createUser(input: { email: $email, firstName: $firstName, lastName: $lastName, password: $password, role: $role })
+  }
+`;
+
 export const UPDATE_TENANT_NAME_MUTATION = `
   mutation UpdateTenantName($tenantName: String!) {
     updateTenantName(tenantName: $tenantName) {
       createdAt
-      email
-      passwordHash
       status
       tenantId
       tenantName
@@ -144,6 +156,6 @@ export async function login(email: string, password: string) {
   return executeMutation(LOGIN_MUTATION, { email, password });
 }
 
-export async function registerTenant(tenantName: string, email: string, password: string) {
-  return executeMutation(REGISTER_TENANT_MUTATION, { tenantName, email, password });
+export async function registerTenant(tenantName: string, firstName: string, lastName: string, email: string, password: string) {
+  return executeMutation(REGISTER_TENANT_MUTATION, { tenantName, firstName, lastName, email, password });
 }
