@@ -497,7 +497,7 @@ const Dashboard = () => {
               </h3>
               {processedData.productionTrend && processedData.productionTrend.length > 0 ? (
                 <ResponsiveContainer width="100%" height={380}>
-                  <BarChart data={processedData.productionTrend} margin={{ top: 10, right: 30, left: 20, bottom: 30 }}>
+                  <BarChart data={processedData.productionTrend} margin={{ top: 10, right: 30, left: 60, bottom: 30 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                     {isMultiDay ? (
                       <XAxis
@@ -520,7 +520,7 @@ const Dashboard = () => {
                         label={{ value: 'Time', position: 'insideBottom', offset: -10, fontSize: 12, fill: '#6b7280' }}
                       />
                     )}
-                    <YAxis tick={{ fontSize: 11 }} stroke="#6b7280" label={{ value: 'Production Units', angle: -90, position: 'insideLeft', fontSize: 12, fill: '#6b7280' }} />
+                    <YAxis tick={{ fontSize: 11 }} stroke="#6b7280" width={60} label={{ value: 'Production Units', angle: -90, position: 'insideLeft', offset: 10, dx: -10, fontSize: 12, fill: '#6b7280' }} />
                     <Tooltip
                       formatter={productionTooltipFormatter}
                       labelFormatter={tooltipLabelFormatter}

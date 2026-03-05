@@ -63,7 +63,7 @@ public class ProfileMutation
         var userId = GetUserId(user);
 
         return await service.ChangePassword(userId, newPassword);
-    }
+    }   
 
     // ======================================================
     // UPDATE TENANT NAME

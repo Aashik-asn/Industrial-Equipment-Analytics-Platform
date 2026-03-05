@@ -16,8 +16,7 @@ const UPSERT_PLANT_GQL = gql`${UPSERT_PLANT_MUTATION}`;
 const INSERT_THRESHOLD_GQL = gql`${INSERT_THRESHOLD_MUTATION}`;
 const ADD_MACHINE_GQL = gql`${ADD_MACHINE_MUTATION}`;
 
-const userRole = localStorage.getItem('role') || '';
-const isAdmin = userRole === 'ADMIN';
+
 
 interface TenantProfile {
   createdAt: string;
@@ -36,6 +35,9 @@ const Profile = () => {
   });
 
   const profile: TenantProfile | null = data?.tenantProfile || null;
+
+  // Derive role from localStorage on every render (must be inside component, not module-level)
+  const isAdmin = localStorage.getItem('role') === 'ADMIN';
 
   type TabType = 'overview' | 'plants' | 'thresholds';
   const [activeTab, setActiveTab] = useState<TabType>('overview');
@@ -738,7 +740,7 @@ const Profile = () => {
             </form>
           </div>
 
-          {/* Edit Tenant Name Card */}
+          {/* Edit Tenant Name Card - visible to all; Save button ADMIN only */}
           <div className="profile-card full-width">
             <div className="profile-card-header">
               <h2 className="profile-card-title">
@@ -759,14 +761,9 @@ const Profile = () => {
                   onChange={(e) => isAdmin && setTenantNameInput(e.target.value)}
                   placeholder="Enter organization name"
                   readOnly={!isAdmin}
-                  style={!isAdmin ? { background: '#f3f4f6', cursor: 'not-allowed', color: '#6b7280' } : {}}
+                  style={!isAdmin ? { background: '#f3f4f6', cursor: 'default', color: '#374151' } : {}}
                   required
                 />
-                {!isAdmin && (
-                  <small style={{ color: '#9ca3af', fontSize: '12px', marginTop: '4px', display: 'block' }}>
-                    Only ADMIN can update the organization name.
-                  </small>
-                )}
               </div>
 
               {tenantNameStatus && (

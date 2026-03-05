@@ -164,18 +164,20 @@ const Sidebar = () => {
       <div className="sidebar-footer">
         {/* User info display */}
         <div style={{
-          padding: '12px 16px',
-          borderTop: '1px solid rgba(255,255,255,0.1)',
-          marginBottom: '4px',
+          padding: '12px 8px',
+          marginBottom: '8px',
           display: 'flex',
           alignItems: 'center',
-          gap: '10px'
+          gap: '10px',
+          borderRadius: '8px',
+          background: '#f0f7ff',
+          border: '1px solid #dbeafe',
         }}>
           <div style={{
-            width: '34px',
-            height: '34px',
+            width: '36px',
+            height: '36px',
             borderRadius: '50%',
-            background: 'rgba(255,255,255,0.15)',
+            background: '#006499',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -186,11 +188,11 @@ const Sidebar = () => {
           }}>
             {(firstName[0] || '?').toUpperCase()}
           </div>
-          <div style={{ overflow: 'hidden' }}>
-            <div style={{ fontWeight: 600, fontSize: '13px', color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <div style={{ overflow: 'hidden', flex: 1 }}>
+            <div style={{ fontWeight: 600, fontSize: '13px', color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {fullName}
             </div>
-            <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            <div style={{ fontSize: '11px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               {role || 'User'}
             </div>
           </div>

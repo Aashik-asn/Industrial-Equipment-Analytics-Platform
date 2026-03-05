@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useApolloClient } from '@apollo/client';
 import { ALERT_DASHBOARD_QUERY, ACKNOWLEDGE_ALERT_MUTATION, ACKNOWLEDGED_ALERT_QUERY } from '../graphql/alertQueries';
 import { PLANTS_QUERY } from '../graphql/queries';
@@ -184,26 +184,27 @@ const PlantAlerts: React.FC = () => {
     const [dateFrom, setDateFrom] = useState<string>('');
     const [dateTo, setDateTo] = useState<string>('');
 
-    const getDashboardVariables = () => {
+    const dashboardVariables = useMemo(() => {
         const variables: Record<string, unknown> = {};
         if (plantId) variables.plantId = plantId;
         if (severityFilter && severityFilter !== 'ALL') variables.severity = severityFilter;
         if (statusFilter && statusFilter !== 'ALL') variables.status = statusFilter;
-
         if (dateFrom) {
             const fromDate = new Date(dateFrom);
-            if (!isNaN(fromDate.getTime())) {
-                variables.fromDate = fromDate.toISOString();
-            }
+            if (!isNaN(fromDate.getTime())) variables.fromDate = fromDate.toISOString();
         }
         if (dateTo) {
             const toDate = new Date(dateTo);
-            if (!isNaN(toDate.getTime())) {
-                variables.toDate = toDate.toISOString();
-            }
+            if (!isNaN(toDate.getTime())) variables.toDate = toDate.toISOString();
         }
         return variables;
-    };
+    }, [plantId, severityFilter, statusFilter, dateFrom, dateTo]);
+
+    const { data, loading, error } = useQuery<AlertDashboardResponse>(ALERT_DASHBOARD_QUERY, {
+        variables: dashboardVariables,
+        fetchPolicy: 'network-only',
+        notifyOnNetworkStatusChange: true
+    });
 
     const [selectedAlert, setSelectedAlert] = useState<AlertData | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -225,16 +226,6 @@ const PlantAlerts: React.FC = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const alertsPerPage = 10;
 
-    const { data, loading, error, refetch: refetchDashboard } = useQuery<AlertDashboardResponse>(ALERT_DASHBOARD_QUERY, {
-        variables: getDashboardVariables(),
-        fetchPolicy: 'network-only', // Ensure fresh data on mounts/actions
-        notifyOnNetworkStatusChange: true
-    });
-
-    React.useEffect(() => {
-        refetchDashboard(getDashboardVariables());
-    }, [plantId, severityFilter, statusFilter, dateFrom, dateTo, refetchDashboard]);
-
     const dashboardData = data?.alertDashboard;
 
     // Compute paginated alerts
@@ -255,7 +246,7 @@ const PlantAlerts: React.FC = () => {
     };
 
     const handleAlertSuccess = async () => {
-        await client.refetchQueries({ include: "active" }); // Reload the table behind the modal to update counts/status globally
+        await client.refetchQueries({ include: "active" });
     };
 
     if (error) {
