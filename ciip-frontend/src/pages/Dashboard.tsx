@@ -497,7 +497,7 @@ const Dashboard = () => {
               </h3>
               {processedData.productionTrend && processedData.productionTrend.length > 0 ? (
                 <ResponsiveContainer width="100%" height={380}>
-                  <BarChart data={processedData.productionTrend} margin={{ top: 10, right: 30, left: 60, bottom: 30 }}>
+                  <BarChart data={processedData.productionTrend} margin={{ top: 10, right: 30, left: 15, bottom: 20 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                     {isMultiDay ? (
                       <XAxis
@@ -517,6 +517,7 @@ const Dashboard = () => {
                         tickFormatter={formatTick}
                         tick={{ fontSize: 11 }}
                         stroke="#6b7280"
+                        padding={{ left: 25, right: 20 }}
                         label={{ value: 'Time', position: 'insideBottom', offset: -10, fontSize: 12, fill: '#6b7280' }}
                       />
                     )}
@@ -543,7 +544,7 @@ const Dashboard = () => {
               </h3>
               {processedData.energyTrend && processedData.energyTrend.length > 0 ? (
                 <ResponsiveContainer width="100%" height={380}>
-                  <AreaChart data={processedData.energyTrend} margin={{ top: 10, right: 30, left: 20, bottom: 30 }}>
+                  <AreaChart data={processedData.energyTrend} margin={{ top: 10, right: 30, left: 20, bottom: 20 }}>
                     <defs>
                       <linearGradient id="energyGradient" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#22c55e" stopOpacity={0.8} />
