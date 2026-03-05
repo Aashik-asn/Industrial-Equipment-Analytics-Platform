@@ -3,6 +3,7 @@ import { NavLink, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useQuery } from '@apollo/client';
 import { PLANTS_QUERY } from '../graphql/queries';
 import logo from '../assets/logo.png';
+import { getFirstName, getLastName, getRole, isAdmin as getIsAdmin } from '../utils/jwt';
 
 interface Plant {
   plantId: string;
@@ -19,20 +20,18 @@ const Sidebar = () => {
   const { data: plantsData } = useQuery(PLANTS_QUERY);
   const plants: Plant[] = plantsData?.plants || [];
 
-  const firstName = localStorage.getItem('firstName') || '';
-  const lastName = localStorage.getItem('lastName') || '';
-  const role = localStorage.getItem('role') || '';
+  // Read name from localStorage (set at login — not in JWT payload)
+  const firstName = getFirstName();
+  const lastName = getLastName();
   const fullName = (firstName || lastName) ? `${firstName} ${lastName}`.trim() : 'User';
-  const isAdmin = role === 'ADMIN';
+  const isAdmin = getIsAdmin();
+  const role = isAdmin ? 'ADMIN' : getRole();
 
   const handleLogout = () => {
     localStorage.removeItem('token');
-    localStorage.removeItem('tenantId');
-    localStorage.removeItem('tenantName');
-    localStorage.removeItem('role');
-    localStorage.removeItem('userId');
     localStorage.removeItem('firstName');
     localStorage.removeItem('lastName');
+    localStorage.removeItem('tenantName');
     navigate('/login');
   };
 

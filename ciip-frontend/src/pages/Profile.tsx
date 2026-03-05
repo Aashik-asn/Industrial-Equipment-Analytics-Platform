@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useApolloClient } from '@apollo/client';
 import { TENANT_PROFILE_QUERY, PLANTS_QUERY, THRESHOLDS_QUERY, MACHINES_QUERY, GATEWAYS_QUERY, ENDPOINTS_QUERY } from '../graphql/queries';
 import { UPDATE_PROFILE_MUTATION, CHANGE_PASSWORD_MUTATION, UPDATE_TENANT_NAME_MUTATION, UPDATE_USERNAME_MUTATION, UPSERT_PLANT_MUTATION, INSERT_THRESHOLD_MUTATION, ADD_MACHINE_MUTATION } from '../graphql/mutations';
+import { isAdmin as getIsAdmin } from '../utils/jwt';
 import dayjs from 'dayjs';
 import '../styles/profile.css';
 
@@ -36,8 +37,8 @@ const Profile = () => {
 
   const profile: TenantProfile | null = data?.tenantProfile || null;
 
-  // Derive role from localStorage on every render (must be inside component, not module-level)
-  const isAdmin = localStorage.getItem('role') === 'ADMIN';
+  // Read role from JWT claims (not localStorage) so it's always fresh
+  const isAdmin = getIsAdmin();
 
   type TabType = 'overview' | 'plants' | 'thresholds';
   const [activeTab, setActiveTab] = useState<TabType>('overview');

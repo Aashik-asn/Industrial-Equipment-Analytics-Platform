@@ -19,13 +19,12 @@ const Login = () => {
     try {
       const data = await login(email, password);
       if (data?.login) {
+        // Token carries userId, tenantId, role (decoded via utils/jwt.ts)
         localStorage.setItem('token', data.login.token);
-        localStorage.setItem('tenantId', data.login.tenantId);
-        localStorage.setItem('tenantName', data.login.tenantName);
-        localStorage.setItem('role', data.login.role);
-        localStorage.setItem('userId', data.login.userId);
+        // These three are NOT in the JWT — store from login response
         localStorage.setItem('firstName', data.login.firstName || '');
         localStorage.setItem('lastName', data.login.lastName || '');
+        localStorage.setItem('tenantName', data.login.tenantName || '');
         navigate('/dashboard');
       } else {
         setError('Invalid credentials');

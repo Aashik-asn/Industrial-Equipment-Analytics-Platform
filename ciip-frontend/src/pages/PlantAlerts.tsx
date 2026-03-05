@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useApolloClient } from '@apollo/client';
 import { ALERT_DASHBOARD_QUERY, ACKNOWLEDGE_ALERT_MUTATION, ACKNOWLEDGED_ALERT_QUERY } from '../graphql/alertQueries';
 import { PLANTS_QUERY } from '../graphql/queries';
+import { canAcknowledge as getCanAcknowledge } from '../utils/jwt';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { useParams } from 'react-router-dom';
@@ -174,8 +175,7 @@ const AcknowledgeAlertModal: React.FC<AcknowledgeModalProps> = ({ isOpen, onClos
 // --- Main Page Component ---
 const PlantAlerts: React.FC = () => {
     const { plantId } = useParams();
-    const userRole = localStorage.getItem('role') || '';
-    const canAcknowledge = userRole === 'ADMIN' || userRole === 'TECHNICIAN';
+    const canAcknowledge = getCanAcknowledge();
 
     const [severityFilter, setSeverityFilter] = useState<string | null>(null);
     const [statusFilter, setStatusFilter] = useState<string | null>('PENDING');
